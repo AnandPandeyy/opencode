@@ -15,8 +15,6 @@ import { BunProc } from "@/bun"
 import { Instance } from "@/project/instance"
 import { registerThemes } from "./context/theme"
 import { existsSync } from "fs"
-import { tmpdir } from "os"
-import { fileURLToPath, pathToFileURL } from "url"
 
 export namespace TuiPlugin {
   const log = Log.create({ service: "tui.plugin" })
@@ -34,34 +32,6 @@ export namespace TuiPlugin {
     const pkg = lastAtIndex > 0 ? spec.substring(0, lastAtIndex) : spec
     const version = lastAtIndex > 0 ? spec.substring(lastAtIndex + 1) : "latest"
     return BunProc.install(pkg, version)
-  }
-
-  async function module(path: string) {
-    if (!path.startsWith("file://")) {
-      return import(path)
-    }
-    const file = fileURLToPath(path)
-    if (!file.endsWith(".tsx") && !file.endsWith(".jsx")) {
-      return import(path)
-    }
-    const build = await Bun.build({
-      entrypoints: [file],
-      target: "bun",
-      format: "esm",
-      minify: false,
-      write: false,
-    })
-    if (!build.success || !build.outputs[0]) {
-      log.error("failed to build local tui plugin", {
-        path,
-        logs: build.logs,
-      })
-      return
-    }
-    const text = await build.outputs[0].text()
-    const out = `${tmpdir()}/opencode-tui-plugin-${Bun.hash(path)}-${Date.now()}.mjs`
-    await Bun.write(out, text)
-    return import(pathToFileURL(out).href)
   }
 
   function slot(entry: unknown) {
@@ -122,7 +92,7 @@ export namespace TuiPlugin {
           })
           if (!path) continue
 
-          const mod = await module(path).catch((error) => {
+          const mod = await import(path).catch((error) => {
             log.error("failed to load tui plugin", { path: spec, error })
             return
           })
