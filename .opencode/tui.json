@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "theme": "workspace-plugin-smoke",
+  "plugin": [
+    [
+      "./plugins/tui-smoke.tsx",
+      {
+        "enabled": true,
+        "label": "workspace"
+      }
+    ]
+  ]
+}
