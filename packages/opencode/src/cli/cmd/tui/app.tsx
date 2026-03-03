@@ -160,14 +160,29 @@ export function tui(input: {
     }
 
     const renderer = await createCliRenderer(rendererConfig(input.config))
-    const registry = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(renderer, {
-      url: input.url,
-      directory: input.directory,
-    })
+    const registry = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
+      renderer,
+      {
+        url: input.url,
+        directory: input.directory,
+      },
+      {
+        onPluginError(event) {
+          console.error("[tui.slot] plugin error", {
+            plugin: event.pluginId,
+            slot: event.slot,
+            phase: event.phase,
+            source: event.source,
+            message: event.error.message,
+          })
+        },
+      },
+    )
     const Slot = createSlot<TuiSlotMap, TuiSlotContext>(registry)
     const slot: TuiSlot = (props) => Slot(props)
     const slots: TuiSlots = {
       register(plugin) {
+        console.error("[tui.slot] register", plugin.id)
         return registry.register(plugin as SolidPlugin<TuiSlotMap, TuiSlotContext>)
       },
     }

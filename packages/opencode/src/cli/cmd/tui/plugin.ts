@@ -87,6 +87,7 @@ export namespace TuiPlugin {
             const plugin = slot(entry)
             if (plugin) {
               input.slots.register(plugin)
+              log.info("registered tui slot plugin", { id: plugin.id })
             }
 
             const tui = (() => {
@@ -97,6 +98,7 @@ export namespace TuiPlugin {
             })()
             if (!tui) continue
             await tui(input, Config.pluginOptions(item))
+            log.info("initialized tui plugin module", { path: spec })
           }
         }
       },
