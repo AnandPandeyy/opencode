@@ -1,5 +1,13 @@
-import type { PluginModule, TuiPlugin as TuiPluginFn, TuiPluginInput, TuiSlotPlugin } from "@opencode-ai/plugin"
+import {
+  setTuiJSXRuntime,
+  type PluginModule,
+  type TuiPlugin as TuiPluginFn,
+  type TuiPluginInput,
+  type TuiSlotPlugin,
+} from "@opencode-ai/plugin"
 import type { JSX } from "solid-js"
+import { createComponent, createElement, spread } from "@opentui/solid"
+
 import { Config } from "@/config/config"
 import { TuiConfig } from "@/config/tui"
 import { Log } from "@/util/log"
@@ -7,6 +15,8 @@ import { BunProc } from "@/bun"
 import { Instance } from "@/project/instance"
 import { registerThemes } from "./context/theme"
 import { existsSync } from "fs"
+import { tmpdir } from "os"
+import { fileURLToPath, pathToFileURL } from "url"
 
 export namespace TuiPlugin {
   const log = Log.create({ service: "tui.plugin" })
@@ -24,6 +34,34 @@ export namespace TuiPlugin {
     const pkg = lastAtIndex > 0 ? spec.substring(0, lastAtIndex) : spec
     const version = lastAtIndex > 0 ? spec.substring(lastAtIndex + 1) : "latest"
     return BunProc.install(pkg, version)
+  }
+
+  async function module(path: string) {
+    if (!path.startsWith("file://")) {
+      return import(path)
+    }
+    const file = fileURLToPath(path)
+    if (!file.endsWith(".tsx") && !file.endsWith(".jsx")) {
+      return import(path)
+    }
+    const build = await Bun.build({
+      entrypoints: [file],
+      target: "bun",
+      format: "esm",
+      minify: false,
+      write: false,
+    })
+    if (!build.success || !build.outputs[0]) {
+      log.error("failed to build local tui plugin", {
+        path,
+        logs: build.logs,
+      })
+      return
+    }
+    const text = await build.outputs[0].text()
+    const out = `${tmpdir()}/opencode-tui-plugin-${Bun.hash(path)}-${Date.now()}.mjs`
+    await Bun.write(out, text)
+    return import(pathToFileURL(out).href)
   }
 
   function slot(entry: unknown) {
@@ -49,6 +87,25 @@ export namespace TuiPlugin {
       })
     }
 
+    const node = (type: unknown, props: unknown) => {
+      if (typeof type === "function") {
+        return createComponent(type as never, (props ?? {}) as never)
+      }
+
+      const out = createElement(String(type))
+      spread(out, (props ?? {}) as Record<string, unknown>)
+      return out
+    }
+    setTuiJSXRuntime({
+      Fragment(props: Record<string, unknown> | undefined) {
+        if (!props || !("children" in props)) return
+        return props.children
+      },
+      jsx: node,
+      jsxs: node,
+      jsxDEV: node,
+    })
+
     await Instance.provide({
       directory: dir,
       fn: async () => {
@@ -65,7 +122,7 @@ export namespace TuiPlugin {
           })
           if (!path) continue
 
-          const mod = await import(path).catch((error) => {
+          const mod = await module(path).catch((error) => {
             log.error("failed to load tui plugin", { path: spec, error })
             return
           })
@@ -87,7 +144,6 @@ export namespace TuiPlugin {
             const plugin = slot(entry)
             if (plugin) {
               input.slots.register(plugin)
-              log.info("registered tui slot plugin", { id: plugin.id })
             }
 
             const tui = (() => {
@@ -98,7 +154,6 @@ export namespace TuiPlugin {
             })()
             if (!tui) continue
             await tui(input, Config.pluginOptions(item))
-            log.info("initialized tui plugin module", { path: spec })
           }
         }
       },

@@ -18,6 +18,7 @@ import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
 
 export * from "./tool.js"
+export { getTuiJSXRuntime, setTuiJSXRuntime, type TuiJSXRuntime } from "./jsx"
 
 export type ProviderContext = {
   source: "env" | "config" | "custom" | "api"
