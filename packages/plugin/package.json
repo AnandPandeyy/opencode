@@ -18,11 +18,19 @@
     "dist"
   ],
   "dependencies": {
-    "@opentui/core": "0.1.86",
     "@opencode-ai/sdk": "workspace:*",
     "zod": "catalog:"
   },
+  "peerDependencies": {
+    "@opentui/core": ">=0.1.87"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@opentui/core": "0.0.0-20260304-eee67156",
     "@tsconfig/node22": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
