@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+import type { CliRenderer } from "@opentui/core"
 import { tmpdir } from "../../fixture/fixture"
 import { Log } from "../../../src/util/log"
 
@@ -80,6 +81,13 @@ test("ignores function-only tui exports and loads object exports", async () => {
   process.env.OPENCODE_TUI_CONFIG = tmp.extra.configPath
   const cwd = spyOn(process, "cwd").mockImplementation(() => tmp.path)
 
+  const renderer = {
+    ...Object.create(null),
+    once(this: CliRenderer) {
+      return this
+    },
+  } satisfies CliRenderer
+
   try {
     await TuiPlugin.init({
       client: createOpencodeClient({
@@ -88,9 +96,7 @@ test("ignores function-only tui exports and loads object exports", async () => {
       event: {
         on: () => () => {},
       },
-      renderer: {
-        once: () => undefined,
-      },
+      renderer,
     })
 
     expect(await fs.readFile(tmp.extra.objMarker, "utf8")).toBe("called")

@@ -18,7 +18,7 @@ import { resolvePluginTarget, uniqueModuleEntries } from "@/plugin/shared"
 import { registerThemes } from "./context/theme"
 
 type Slot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => JSX.Element | null
-type InitInput<Renderer> = Omit<TuiPluginInput<Renderer>, "slots">
+type InitInput = Omit<TuiPluginInput<CliRenderer>, "slots">
 
 function empty<K extends keyof TuiSlotMap>(_props: { name: K } & TuiSlotMap[K]) {
   return null
@@ -44,20 +44,14 @@ function getThemes(value: unknown) {
   return value.themes
 }
 
-function isTuiPlugin<Renderer>(value: unknown): value is TuiPluginFn<Renderer> {
+function isTuiPlugin(value: unknown): value is TuiPluginFn<CliRenderer> {
   return typeof value === "function"
 }
 
-function getTuiPlugin<Renderer>(value: unknown) {
+function getTuiPlugin(value: unknown) {
   if (!isRecord(value) || !("tui" in value)) return
-  if (!isTuiPlugin<Renderer>(value.tui)) return
+  if (!isTuiPlugin(value.tui)) return
   return value.tui
-}
-
-function isCliRenderer(value: unknown): value is CliRenderer {
-  if (!isRecord(value)) return false
-  if (!("once" in value)) return false
-  return typeof value.once === "function"
 }
 
 export namespace TuiPlugin {
@@ -67,11 +61,7 @@ export namespace TuiPlugin {
 
   export const Slot: Slot = (props) => view(props)
 
-  function setupSlots(renderer: unknown): TuiSlots {
-    if (!isCliRenderer(renderer)) {
-      throw new TypeError("Invalid TUI renderer")
-    }
-
+  function setupSlots(renderer: CliRenderer): TuiSlots {
     const reg = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
       renderer,
       {},
@@ -98,7 +88,7 @@ export namespace TuiPlugin {
     }
   }
 
-  export async function init<Renderer>(input: InitInput<Renderer>) {
+  export async function init(input: InitInput) {
     if (loaded) return loaded
     loaded = load({
       ...input,
@@ -107,7 +97,7 @@ export namespace TuiPlugin {
     return loaded
   }
 
-  async function load<Renderer>(input: TuiPluginInput<Renderer>) {
+  async function load(input: TuiPluginInput<CliRenderer>) {
     const dir = process.cwd()
 
     await Instance.provide({
@@ -148,7 +138,7 @@ export namespace TuiPlugin {
             const slotPlugin = getTuiSlotPlugin(entry)
             if (slotPlugin) input.slots.register(slotPlugin)
 
-            const tuiPlugin = getTuiPlugin<Renderer>(entry)
+            const tuiPlugin = getTuiPlugin(entry)
             if (!tuiPlugin) continue
             await tuiPlugin(input, Config.pluginOptions(item))
           }
