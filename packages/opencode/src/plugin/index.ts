@@ -81,14 +81,14 @@ export namespace Plugin {
       return installed
     }
 
-    function plugin(value: unknown): value is PluginInstance {
+    function isServerPlugin(value: unknown): value is PluginInstance {
       return typeof value === "function"
     }
 
-    function pick(value: unknown) {
-      if (plugin(value)) return value
+    function getServerPlugin(value: unknown) {
+      if (isServerPlugin(value)) return value
       if (!value || typeof value !== "object" || !("server" in value)) return
-      if (!plugin(value.server)) return
+      if (!isServerPlugin(value.server)) return
       return value.server
     }
 
@@ -118,7 +118,7 @@ export namespace Plugin {
       for (const entry of Object.values(mod)) {
         if (seen.has(entry)) continue
         seen.add(entry)
-        const server = pick(entry)
+        const server = getServerPlugin(entry)
         if (!server) continue
         const init = await server(input, Config.pluginOptions(item)).catch((err) => {
           const message = err instanceof Error ? err.message : String(err)

@@ -22,39 +22,39 @@ function empty<K extends keyof TuiSlotMap>(_props: { name: K } & TuiSlotMap[K]) 
   return null
 }
 
-function record(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") return false
   if (Array.isArray(value)) return false
   return true
 }
 
-function plugin(value: unknown): value is SolidPlugin<TuiSlotMap, TuiSlotContext> {
-  if (!record(value)) return false
+function isTuiSlotPlugin(value: unknown): value is SolidPlugin<TuiSlotMap, TuiSlotContext> {
+  if (!isRecord(value)) return false
   if (typeof value.id !== "string") return false
-  if (!record(value.slots)) return false
+  if (!isRecord(value.slots)) return false
   return true
 }
 
-function pick(value: unknown) {
-  if (plugin(value)) return value
-  if (!record(value)) return
-  if (!plugin(value.slots)) return
+function getTuiSlotPlugin(value: unknown) {
+  if (isTuiSlotPlugin(value)) return value
+  if (!isRecord(value)) return
+  if (!isTuiSlotPlugin(value.slots)) return
   return value.slots
 }
 
-function themes(value: unknown) {
-  if (!record(value) || !("themes" in value)) return
-  if (!record(value.themes)) return
+function getThemes(value: unknown) {
+  if (!isRecord(value) || !("themes" in value)) return
+  if (!isRecord(value.themes)) return
   return value.themes
 }
 
-function run<Renderer>(value: unknown): value is TuiPluginFn<Renderer> {
+function isTuiPlugin<Renderer>(value: unknown): value is TuiPluginFn<Renderer> {
   return typeof value === "function"
 }
 
-function tui<Renderer>(value: unknown) {
-  if (!record(value) || !("tui" in value)) return
-  if (!run<Renderer>(value.tui)) return
+function getTuiPlugin<Renderer>(value: unknown) {
+  if (!isRecord(value) || !("tui" in value)) return
+  if (!isTuiPlugin<Renderer>(value.tui)) return
   return value.tui
 }
 
@@ -87,8 +87,7 @@ export namespace TuiPlugin {
 
     return {
       register(pluginSlot) {
-        if (!plugin(pluginSlot)) return () => {}
-        console.error("[tui.slot] register", pluginSlot.id)
+        if (!isTuiSlotPlugin(pluginSlot)) return () => {}
         return reg.register(pluginSlot)
       },
     }
@@ -146,15 +145,15 @@ export namespace TuiPlugin {
               continue
             }
 
-            const theme = themes(entry)
+            const theme = getThemes(entry)
             if (theme) registerThemes(theme)
 
-            const plugin = pick(entry)
-            if (plugin) input.slots.register(plugin)
+            const slotPlugin = getTuiSlotPlugin(entry)
+            if (slotPlugin) input.slots.register(slotPlugin)
 
-            const run = tui<Renderer>(entry)
-            if (!run) continue
-            await run(input, Config.pluginOptions(item))
+            const tuiPlugin = getTuiPlugin<Renderer>(entry)
+            if (!tuiPlugin) continue
+            await tuiPlugin(input, Config.pluginOptions(item))
           }
         }
       },

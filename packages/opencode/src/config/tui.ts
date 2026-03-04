@@ -100,7 +100,7 @@ export namespace TuiConfig {
     await Promise.all(deps)
   }
 
-  function record(value: unknown): value is Record<string, unknown> {
+  function isRecord(value: unknown): value is Record<string, unknown> {
     if (!value || typeof value !== "object") return false
     if (Array.isArray(value)) return false
     return true
@@ -117,14 +117,14 @@ export namespace TuiConfig {
 
   async function load(text: string, configFilepath: string): Promise<Info> {
     const raw = await ConfigPaths.parseText(text, configFilepath, "empty")
-    if (!record(raw)) return {}
+    if (!isRecord(raw)) return {}
 
     // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
     // (mirroring the old opencode.json shape) still get their settings applied.
     const normalized = (() => {
       const copy = { ...raw }
       if (!("tui" in copy)) return copy
-      if (!record(copy.tui)) {
+      if (!isRecord(copy.tui)) {
         delete copy.tui
         return copy
       }
