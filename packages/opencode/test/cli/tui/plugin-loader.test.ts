@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import type { TuiPluginInput } from "@opencode-ai/plugin/tui"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { tmpdir } from "../../fixture/fixture"
 import { Log } from "../../../src/util/log"
 
@@ -82,15 +83,17 @@ test("ignores function-only tui exports and loads object exports", async () => {
 
   try {
     const input = {
-      client: {} as TuiPluginInput["client"],
+      client: createOpencodeClient({
+        baseUrl: "http://localhost:4096",
+      }),
       event: {
         on: () => () => {},
       },
-      renderer: {} as TuiPluginInput["renderer"],
+      renderer: {},
       slots: {
         register: () => () => {},
       },
-    } satisfies TuiPluginInput
+    } satisfies TuiPluginInput<object>
 
     await TuiPlugin.init(input)
 

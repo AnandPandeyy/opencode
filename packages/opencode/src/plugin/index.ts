@@ -81,6 +81,17 @@ export namespace Plugin {
       return installed
     }
 
+    function plugin(value: unknown): value is PluginInstance {
+      return typeof value === "function"
+    }
+
+    function pick(value: unknown) {
+      if (plugin(value)) return value
+      if (!value || typeof value !== "object" || !("server" in value)) return
+      if (!plugin(value.server)) return
+      return value.server
+    }
+
     for (const item of plugins) {
       const spec = Config.pluginSpecifier(item)
       // ignore old codex plugin since it is supported first party now
@@ -107,13 +118,7 @@ export namespace Plugin {
       for (const entry of Object.values(mod)) {
         if (seen.has(entry)) continue
         seen.add(entry)
-        const server = (() => {
-          if (typeof entry === "function") return entry as PluginInstance
-          if (!entry || typeof entry !== "object") return
-          if (!("server" in entry)) return
-          if (typeof entry.server !== "function") return
-          return entry.server as PluginInstance
-        })()
+        const server = pick(entry)
         if (!server) continue
         const init = await server(input, Config.pluginOptions(item)).catch((err) => {
           const message = err instanceof Error ? err.message : String(err)

@@ -73,7 +73,7 @@ export function Home() {
           </Switch>
         </text>
       </Show>
-      {TuiPlugin.Slot({ name: "home_hint" }) as never}
+      {TuiPlugin.Slot({ name: "home_hint" })}
     </box>
   )
 
@@ -153,7 +153,7 @@ export function Home() {
           </Show>
         </box>
         <box flexGrow={1} />
-        {TuiPlugin.Slot({ name: "home_footer" }) as never}
+        {TuiPlugin.Slot({ name: "home_footer" })}
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>

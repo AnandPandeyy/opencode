@@ -1,15 +1,12 @@
 import {
   type TuiPlugin as TuiPluginFn,
   type TuiPluginInput,
-  type TuiPluginModule,
   type TuiSlotContext,
   type TuiSlotMap,
-  type TuiSlotPlugin,
   type TuiSlots,
 } from "@opencode-ai/plugin/tui"
-import { createSlot, createSolidSlotRegistry, type SolidPlugin } from "@opentui/solid"
+import { createSlot, createSolidSlotRegistry, type JSX, type SolidPlugin } from "@opentui/solid"
 import type { CliRenderer } from "@opentui/core"
-import type { JSX } from "solid-js"
 import "@opentui/solid/preload"
 
 import { Config } from "@/config/config"
@@ -19,10 +16,46 @@ import { BunProc } from "@/bun"
 import { Instance } from "@/project/instance"
 import { registerThemes } from "./context/theme"
 
-type Slot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => unknown
+type Slot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => JSX.Element | null
 
 function empty<K extends keyof TuiSlotMap>(_props: { name: K } & TuiSlotMap[K]) {
   return null
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false
+  if (Array.isArray(value)) return false
+  return true
+}
+
+function plugin(value: unknown): value is SolidPlugin<TuiSlotMap, TuiSlotContext> {
+  if (!record(value)) return false
+  if (typeof value.id !== "string") return false
+  if (!record(value.slots)) return false
+  return true
+}
+
+function pick(value: unknown) {
+  if (plugin(value)) return value
+  if (!record(value)) return
+  if (!plugin(value.slots)) return
+  return value.slots
+}
+
+function themes(value: unknown) {
+  if (!record(value) || !("themes" in value)) return
+  if (!record(value.themes)) return
+  return value.themes
+}
+
+function run<Renderer>(value: unknown): value is TuiPluginFn<Renderer> {
+  return typeof value === "function"
+}
+
+function tui<Renderer>(value: unknown) {
+  if (!record(value) || !("tui" in value)) return
+  if (!run<Renderer>(value.tui)) return
+  return value.tui
 }
 
 export namespace TuiPlugin {
@@ -53,14 +86,15 @@ export namespace TuiPlugin {
     view = (props) => slot(props)
 
     return {
-      register(plugin) {
-        console.error("[tui.slot] register", plugin.id)
-        return reg.register(plugin as SolidPlugin<TuiSlotMap, TuiSlotContext>)
+      register(pluginSlot) {
+        if (!plugin(pluginSlot)) return () => {}
+        console.error("[tui.slot] register", pluginSlot.id)
+        return reg.register(pluginSlot)
       },
     }
   }
 
-  export async function init(input: TuiPluginInput) {
+  export async function init<Renderer>(input: TuiPluginInput<Renderer>) {
     if (loaded) return loaded
     loaded = load(input)
     return loaded
@@ -74,20 +108,7 @@ export namespace TuiPlugin {
     return BunProc.install(pkg, version)
   }
 
-  function pick(entry: unknown) {
-    if (!entry || typeof entry !== "object") return
-    if ("id" in entry && typeof entry.id === "string" && "slots" in entry && typeof entry.slots === "object") {
-      return entry as TuiSlotPlugin<JSX.Element>
-    }
-    if (!("slots" in entry)) return
-    const value = entry.slots
-    if (!value || typeof value !== "object") return
-    if (!("id" in value) || typeof value.id !== "string") return
-    if (!("slots" in value) || typeof value.slots !== "object") return
-    return value as TuiSlotPlugin<JSX.Element>
-  }
-
-  async function load(input: TuiPluginInput) {
+  async function load<Renderer>(input: TuiPluginInput<Renderer>) {
     const dir = process.cwd()
 
     await Instance.provide({
@@ -125,18 +146,15 @@ export namespace TuiPlugin {
               continue
             }
 
-            const pluginEntry = entry as TuiPluginModule
-            if (pluginEntry.themes && typeof pluginEntry.themes === "object") {
-              registerThemes(pluginEntry.themes as Record<string, unknown>)
-            }
+            const theme = themes(entry)
+            if (theme) registerThemes(theme)
 
-            const plugin = pick(pluginEntry)
-            if (plugin) {
-              input.slots.register(plugin)
-            }
+            const plugin = pick(entry)
+            if (plugin) input.slots.register(plugin)
 
-            if (!pluginEntry.tui || typeof pluginEntry.tui !== "function") continue
-            await (pluginEntry.tui as TuiPluginFn)(input, Config.pluginOptions(item))
+            const run = tui<Renderer>(entry)
+            if (!run) continue
+            await run(input, Config.pluginOptions(item))
           }
         }
       },
