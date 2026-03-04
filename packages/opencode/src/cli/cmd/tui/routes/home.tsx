@@ -112,7 +112,7 @@ export function Home() {
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
         <box flexShrink={0}>
-          <TuiPlugin.Slot name="home_logo" slotMode="replace">
+          <TuiPlugin.Slot name="home_logo" mode="replace">
             <Logo />
           </TuiPlugin.Slot>
         </box>

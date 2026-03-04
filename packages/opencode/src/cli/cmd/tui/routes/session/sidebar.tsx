@@ -91,7 +91,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
           }}
         >
           <box flexShrink={0} gap={1} paddingRight={1}>
-            {TuiPlugin.Slot({ name: "sidebar_top", session_id: props.sessionID })}
+            <TuiPlugin.Slot name="sidebar_top" session_id={props.sessionID} />
             <box paddingRight={1}>
               <text fg={theme.text}>
                 <b>{session().title}</b>

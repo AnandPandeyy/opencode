@@ -18,29 +18,16 @@ import { Instance } from "@/project/instance"
 import { resolvePluginTarget, uniqueModuleEntries } from "@/plugin/shared"
 import { registerThemes } from "./context/theme"
 
-type SlotInput<K extends keyof TuiSlotMap> = {
-  name: K
-  mode?: SlotMode
-  slotMode?: SlotMode
-  children?: JSX.Element
-} & TuiSlotMap[K]
-
 type SlotProps<K extends keyof TuiSlotMap> = {
   name: K
   mode?: SlotMode
   children?: JSX.Element
 } & TuiSlotMap[K]
 
-type Slot = <K extends keyof TuiSlotMap>(props: SlotInput<K>) => JSX.Element | null
+type Slot = <K extends keyof TuiSlotMap>(props: SlotProps<K>) => JSX.Element | null
 type InitInput = Omit<TuiPluginInput<CliRenderer>, "slots">
 
-function normalize<K extends keyof TuiSlotMap>(props: SlotInput<K>): SlotProps<K> {
-  const { slotMode, ...rest } = props
-  if (!slotMode || rest.mode) return rest as SlotProps<K>
-  return { ...rest, mode: slotMode } as SlotProps<K>
-}
-
-function empty<K extends keyof TuiSlotMap>(_props: SlotInput<K>) {
+function empty<K extends keyof TuiSlotMap>(_props: SlotProps<K>) {
   return null
 }
 
@@ -99,7 +86,7 @@ export namespace TuiPlugin {
     )
 
     const slot = createSlot<TuiSlotMap, TuiSlotContext>(reg)
-    view = (props) => slot(normalize(props))
+    view = (props) => slot(props)
     return {
       register(pluginSlot) {
         if (!isTuiSlotPlugin(pluginSlot)) return () => {}
