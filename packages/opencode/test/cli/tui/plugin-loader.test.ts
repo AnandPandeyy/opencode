@@ -88,7 +88,9 @@ test("ignores function-only tui exports and loads object exports", async () => {
       event: {
         on: () => () => {},
       },
-      renderer: {},
+      renderer: {
+        once: () => undefined,
+      },
     })
 
     expect(await fs.readFile(tmp.extra.objMarker, "utf8")).toBe("called")

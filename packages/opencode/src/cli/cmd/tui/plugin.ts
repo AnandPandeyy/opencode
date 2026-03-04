@@ -54,19 +54,24 @@ function getTuiPlugin<Renderer>(value: unknown) {
   return value.tui
 }
 
+function isCliRenderer(value: unknown): value is CliRenderer {
+  if (!isRecord(value)) return false
+  if (!("once" in value)) return false
+  return typeof value.once === "function"
+}
+
 export namespace TuiPlugin {
   const log = Log.create({ service: "tui.plugin" })
   let loaded: Promise<void> | undefined
   let view: Slot = empty
-  let api: TuiSlots = {
-    register() {
-      return () => {}
-    },
-  }
 
   export const Slot: Slot = (props) => view(props)
 
-  export function initializeSlots(renderer: CliRenderer) {
+  function setupSlots(renderer: unknown): TuiSlots {
+    if (!isCliRenderer(renderer)) {
+      throw new TypeError("Invalid TUI renderer")
+    }
+
     const reg = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
       renderer,
       {},
@@ -85,7 +90,7 @@ export namespace TuiPlugin {
 
     const slot = createSlot<TuiSlotMap, TuiSlotContext>(reg)
     view = (props) => slot(props)
-    api = {
+    return {
       register(pluginSlot) {
         if (!isTuiSlotPlugin(pluginSlot)) return () => {}
         return reg.register(pluginSlot)
@@ -95,16 +100,15 @@ export namespace TuiPlugin {
 
   export async function init<Renderer>(input: InitInput<Renderer>) {
     if (loaded) return loaded
-    loaded = load(input)
+    loaded = load({
+      ...input,
+      slots: setupSlots(input.renderer),
+    })
     return loaded
   }
 
-  async function load<Renderer>(input: InitInput<Renderer>) {
+  async function load<Renderer>(input: TuiPluginInput<Renderer>) {
     const dir = process.cwd()
-    const ctx: TuiPluginInput<Renderer> = {
-      ...input,
-      slots: api,
-    }
 
     await Instance.provide({
       directory: dir,
@@ -142,11 +146,11 @@ export namespace TuiPlugin {
             if (theme) registerThemes(theme)
 
             const slotPlugin = getTuiSlotPlugin(entry)
-            if (slotPlugin) ctx.slots.register(slotPlugin)
+            if (slotPlugin) input.slots.register(slotPlugin)
 
             const tuiPlugin = getTuiPlugin<Renderer>(entry)
             if (!tuiPlugin) continue
-            await tuiPlugin(ctx, Config.pluginOptions(item))
+            await tuiPlugin(input, Config.pluginOptions(item))
           }
         }
       },
