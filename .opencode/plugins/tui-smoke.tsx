@@ -1,4 +1,3 @@
-/** @jsxImportSource ../../packages/plugin/src */
 import mytheme from "../themes/mytheme.json" with { type: "json" }
 
 const slot = (label) => ({

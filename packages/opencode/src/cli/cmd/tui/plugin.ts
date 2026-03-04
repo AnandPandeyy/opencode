@@ -1,12 +1,11 @@
 import {
-  setTuiJSXRuntime,
   type PluginModule,
   type TuiPlugin as TuiPluginFn,
   type TuiPluginInput,
   type TuiSlotPlugin,
 } from "@opencode-ai/plugin"
 import type { JSX } from "solid-js"
-import { createComponent, createElement, spread } from "@opentui/solid"
+import "@opentui/solid/preload"
 
 import { Config } from "@/config/config"
 import { TuiConfig } from "@/config/tui"
@@ -57,25 +56,6 @@ export namespace TuiPlugin {
       })
     }
 
-    const node = (type: unknown, props: unknown) => {
-      if (typeof type === "function") {
-        return createComponent(type as never, (props ?? {}) as never)
-      }
-
-      const out = createElement(String(type))
-      spread(out, (props ?? {}) as Record<string, unknown>)
-      return out
-    }
-    setTuiJSXRuntime({
-      Fragment(props: Record<string, unknown> | undefined) {
-        if (!props || !("children" in props)) return
-        return props.children
-      },
-      jsx: node,
-      jsxs: node,
-      jsxDEV: node,
-    })
-
     await Instance.provide({
       directory: dir,
       fn: async () => {
@@ -86,13 +66,13 @@ export namespace TuiPlugin {
         for (const item of plugins) {
           const spec = Config.pluginSpecifier(item)
           log.info("loading tui plugin", { path: spec })
-          const path = await resolve(spec).catch((error) => {
-            log.error("failed to install tui plugin", { path: spec, error })
+          const target = await resolve(spec).catch((error) => {
+            log.error("failed to resolve tui plugin", { path: spec, error })
             return
           })
-          if (!path) continue
+          if (!target) continue
 
-          const mod = await import(path).catch((error) => {
+          const mod = await import(target).catch((error) => {
             log.error("failed to load tui plugin", { path: spec, error })
             return
           })
