@@ -15,7 +15,7 @@ import { Installation } from "@/installation"
 import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
 import { useLocal } from "../context/local"
-import type { TuiSlotMap } from "@opencode-ai/plugin"
+import type { TuiSlotMap } from "@opencode-ai/plugin/tui"
 
 type Slot = <K extends "home_hint" | "home_footer">(props: { name: K } & TuiSlotMap[K]) => unknown
 

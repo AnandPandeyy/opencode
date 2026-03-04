@@ -1,6 +1,6 @@
 import { createOpencodeClient, type Event } from "@opencode-ai/sdk/v2"
 import type { CliRenderer } from "@opentui/core"
-import type { TuiSlots } from "@opencode-ai/plugin"
+import type { TuiSlots } from "@opencode-ai/plugin/tui"
 import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, onCleanup, onMount } from "solid-js"

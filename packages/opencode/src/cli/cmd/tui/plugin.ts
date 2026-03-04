@@ -1,9 +1,9 @@
 import {
-  type PluginModule,
   type TuiPlugin as TuiPluginFn,
   type TuiPluginInput,
+  type TuiPluginModule,
   type TuiSlotPlugin,
-} from "@opencode-ai/plugin"
+} from "@opencode-ai/plugin/tui"
 import type { JSX } from "solid-js"
 import "@opentui/solid/preload"
 
@@ -79,7 +79,7 @@ export namespace TuiPlugin {
           if (!mod) continue
 
           const seen = new Set<unknown>()
-          for (const entry of Object.values<PluginModule>(mod)) {
+          for (const entry of Object.values<TuiPluginModule>(mod)) {
             if (seen.has(entry)) continue
             seen.add(entry)
 

@@ -49,7 +49,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
-import type { TuiSlotContext, TuiSlotMap, TuiSlots } from "@opencode-ai/plugin"
+import type { TuiSlotContext, TuiSlotMap, TuiSlots } from "@opencode-ai/plugin/tui"
 
 type TuiSlot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => unknown
 

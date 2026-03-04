@@ -80,7 +80,7 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import type { TuiSlotMap } from "@opencode-ai/plugin"
+import type { TuiSlotMap } from "@opencode-ai/plugin/tui"
 
 addDefaultParsers(parsers.parsers)
 
