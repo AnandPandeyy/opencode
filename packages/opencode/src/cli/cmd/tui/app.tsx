@@ -1,12 +1,4 @@
-import {
-  createSlot,
-  createSolidSlotRegistry,
-  render,
-  useKeyboard,
-  useRenderer,
-  useTerminalDimensions,
-  type SolidPlugin,
-} from "@opentui/solid"
+import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { createCliRenderer, MouseButton, TextAttributes, type CliRendererConfig } from "@opentui/core"
@@ -49,9 +41,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
-import type { TuiSlotContext, TuiSlotMap, TuiSlots } from "@opencode-ai/plugin/tui"
-
-type TuiSlot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => unknown
+import { TuiPlugin } from "./plugin"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -160,29 +150,7 @@ export function tui(input: {
     }
 
     const renderer = await createCliRenderer(rendererConfig(input.config))
-    const registry = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
-      renderer,
-      {},
-      {
-        onPluginError(event) {
-          console.error("[tui.slot] plugin error", {
-            plugin: event.pluginId,
-            slot: event.slot,
-            phase: event.phase,
-            source: event.source,
-            message: event.error.message,
-          })
-        },
-      },
-    )
-    const Slot = createSlot<TuiSlotMap, TuiSlotContext>(registry)
-    const slot: TuiSlot = (props) => Slot(props)
-    const slots: TuiSlots = {
-      register(plugin) {
-        console.error("[tui.slot] register", plugin.id)
-        return registry.register(plugin as SolidPlugin<TuiSlotMap, TuiSlotContext>)
-      },
-    }
+    const slots = TuiPlugin.slots(renderer)
 
     await render(() => {
       return (
@@ -214,7 +182,7 @@ export function tui(input: {
                                       <FrecencyProvider>
                                         <PromptHistoryProvider>
                                           <PromptRefProvider>
-                                            <App slot={slot} />
+                                            <App />
                                           </PromptRefProvider>
                                         </PromptHistoryProvider>
                                       </FrecencyProvider>
@@ -238,7 +206,7 @@ export function tui(input: {
   })
 }
 
-function App(props: { slot: TuiSlot }) {
+function App() {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
@@ -794,10 +762,10 @@ function App(props: { slot: TuiSlot }) {
     >
       <Switch>
         <Match when={route.data.type === "home"}>
-          <Home slot={props.slot} />
+          <Home />
         </Match>
         <Match when={route.data.type === "session"}>
-          <Session slot={props.slot} />
+          <Session />
         </Match>
       </Switch>
     </box>

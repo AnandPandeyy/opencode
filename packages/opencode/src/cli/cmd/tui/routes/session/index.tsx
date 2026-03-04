@@ -80,11 +80,9 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import type { TuiSlotMap } from "@opencode-ai/plugin/tui"
+import { TuiPlugin } from "../../plugin"
 
 addDefaultParsers(parsers.parsers)
-
-type Slot = (props: { name: "session_footer"; session_id: TuiSlotMap["session_footer"]["session_id"] }) => unknown
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -115,7 +113,7 @@ function use() {
   return ctx
 }
 
-export function Session(props: { slot: Slot }) {
+export function Session() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const sync = useSync()
@@ -1190,7 +1188,7 @@ export function Session(props: { slot: Slot }) {
                 }}
                 sessionID={route.sessionID}
               />
-              {props.slot({ name: "session_footer", session_id: route.sessionID }) as never}
+              {TuiPlugin.Slot({ name: "session_footer", session_id: route.sessionID }) as never}
             </box>
           </Show>
           <Toast />

@@ -2,8 +2,13 @@ import {
   type TuiPlugin as TuiPluginFn,
   type TuiPluginInput,
   type TuiPluginModule,
+  type TuiSlotContext,
+  type TuiSlotMap,
   type TuiSlotPlugin,
+  type TuiSlots,
 } from "@opencode-ai/plugin/tui"
+import { createSlot, createSolidSlotRegistry, type SolidPlugin } from "@opentui/solid"
+import type { CliRenderer } from "@opentui/core"
 import type { JSX } from "solid-js"
 import "@opentui/solid/preload"
 
@@ -14,9 +19,46 @@ import { BunProc } from "@/bun"
 import { Instance } from "@/project/instance"
 import { registerThemes } from "./context/theme"
 
+type Slot = <K extends keyof TuiSlotMap>(props: { name: K } & TuiSlotMap[K]) => unknown
+
+function empty<K extends keyof TuiSlotMap>(_props: { name: K } & TuiSlotMap[K]) {
+  return null
+}
+
 export namespace TuiPlugin {
   const log = Log.create({ service: "tui.plugin" })
   let loaded: Promise<void> | undefined
+  let view: Slot = empty
+
+  export const Slot: Slot = (props) => view(props)
+
+  export function slots(renderer: CliRenderer): TuiSlots {
+    const reg = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
+      renderer,
+      {},
+      {
+        onPluginError(event) {
+          console.error("[tui.slot] plugin error", {
+            plugin: event.pluginId,
+            slot: event.slot,
+            phase: event.phase,
+            source: event.source,
+            message: event.error.message,
+          })
+        },
+      },
+    )
+
+    const slot = createSlot<TuiSlotMap, TuiSlotContext>(reg)
+    view = (props) => slot(props)
+
+    return {
+      register(plugin) {
+        console.error("[tui.slot] register", plugin.id)
+        return reg.register(plugin as SolidPlugin<TuiSlotMap, TuiSlotContext>)
+      },
+    }
+  }
 
   export async function init(input: TuiPluginInput) {
     if (loaded) return loaded
@@ -32,7 +74,7 @@ export namespace TuiPlugin {
     return BunProc.install(pkg, version)
   }
 
-  function slot(entry: unknown) {
+  function pick(entry: unknown) {
     if (!entry || typeof entry !== "object") return
     if ("id" in entry && typeof entry.id === "string" && "slots" in entry && typeof entry.slots === "object") {
       return entry as TuiSlotPlugin<JSX.Element>
@@ -88,7 +130,7 @@ export namespace TuiPlugin {
               registerThemes(pluginEntry.themes as Record<string, unknown>)
             }
 
-            const plugin = slot(pluginEntry)
+            const plugin = pick(pluginEntry)
             if (plugin) {
               input.slots.register(plugin)
             }

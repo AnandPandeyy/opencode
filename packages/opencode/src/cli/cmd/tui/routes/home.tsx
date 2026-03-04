@@ -15,14 +15,12 @@ import { Installation } from "@/installation"
 import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
 import { useLocal } from "../context/local"
-import type { TuiSlotMap } from "@opencode-ai/plugin/tui"
-
-type Slot = <K extends "home_hint" | "home_footer">(props: { name: K } & TuiSlotMap[K]) => unknown
+import { TuiPlugin } from "../plugin"
 
 // TODO: what is the best way to do this?
 let once = false
 
-export function Home(props: { slot: Slot }) {
+export function Home() {
   const sync = useSync()
   const kv = useKV()
   const { theme } = useTheme()
@@ -75,7 +73,7 @@ export function Home(props: { slot: Slot }) {
           </Switch>
         </text>
       </Show>
-      {props.slot({ name: "home_hint" }) as never}
+      {TuiPlugin.Slot({ name: "home_hint" }) as never}
     </box>
   )
 
@@ -155,7 +153,7 @@ export function Home(props: { slot: Slot }) {
           </Show>
         </box>
         <box flexGrow={1} />
-        {props.slot({ name: "home_footer" }) as never}
+        {TuiPlugin.Slot({ name: "home_footer" }) as never}
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>
