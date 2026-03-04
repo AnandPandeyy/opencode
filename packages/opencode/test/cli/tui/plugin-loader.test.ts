@@ -2,7 +2,6 @@ import { expect, mock, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
-import type { TuiPluginInput } from "@opencode-ai/plugin/tui"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { tmpdir } from "../../fixture/fixture"
 import { Log } from "../../../src/util/log"
@@ -82,7 +81,7 @@ test("ignores function-only tui exports and loads object exports", async () => {
   const cwd = spyOn(process, "cwd").mockImplementation(() => tmp.path)
 
   try {
-    const input = {
+    await TuiPlugin.init({
       client: createOpencodeClient({
         baseUrl: "http://localhost:4096",
       }),
@@ -90,12 +89,7 @@ test("ignores function-only tui exports and loads object exports", async () => {
         on: () => () => {},
       },
       renderer: {},
-      slots: {
-        register: () => () => {},
-      },
-    } satisfies TuiPluginInput<object>
-
-    await TuiPlugin.init(input)
+    })
 
     expect(await fs.readFile(tmp.extra.objMarker, "utf8")).toBe("called")
     await expect(fs.readFile(tmp.extra.fnMarker, "utf8")).rejects.toThrow()

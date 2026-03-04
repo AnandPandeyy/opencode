@@ -150,7 +150,7 @@ export function tui(input: {
     }
 
     const renderer = await createCliRenderer(rendererConfig(input.config))
-    const slots = TuiPlugin.slots(renderer)
+    TuiPlugin.initializeSlots(renderer)
 
     await render(() => {
       return (
@@ -166,7 +166,6 @@ export function tui(input: {
                       <SDKProvider
                         url={input.url}
                         renderer={renderer}
-                        slots={slots}
                         directory={input.directory}
                         fetch={input.fetch}
                         headers={input.headers}
