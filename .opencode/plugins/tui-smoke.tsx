@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import mytheme from "../themes/mytheme.json" with { type: "json" }
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import type { RGBA } from "@opentui/core"
+import { VignetteEffect, type RGBA } from "@opentui/core"
 import type { TuiApi, TuiPluginInput } from "@opencode-ai/plugin/tui"
 
 const tabs = ["overview", "counter", "help"]
@@ -12,12 +12,18 @@ const pick = (value: unknown, fallback: string) => {
   return value
 }
 
+const num = (value: unknown, fallback: number) => {
+  if (typeof value !== "number") return fallback
+  return value
+}
+
 const cfg = (options: Record<string, unknown> | undefined) => {
   return {
     label: pick(options?.label, "smoke"),
     modal: pick(options?.modal, "ctrl+shift+m"),
     screen: pick(options?.screen, "ctrl+shift+o"),
     route: pick(options?.route, "workspace-smoke"),
+    vignette: Math.max(0, num(options?.vignette, 0.35)),
   }
 }
 
@@ -641,6 +647,8 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
 
   const value = cfg(options)
   const route = names(value)
+  const fx = new VignetteEffect(value.vignette)
+  input.renderer.addPostProcessFn(fx.apply.bind(fx))
 
   input.api.route.register([
     {
