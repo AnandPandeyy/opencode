@@ -361,8 +361,9 @@ export namespace Config {
 
     const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
     if (targetVersion === "latest") {
-      const isOutdated = await PackageRegistry.isOutdated("@opencode-ai/plugin", depVersion, dir)
-      if (!isOutdated) return false
+      if (!PackageRegistry.online()) return false
+      const stale = await PackageRegistry.isOutdated("@opencode-ai/plugin", depVersion, dir)
+      if (!stale) return false
       log.info("Cached version is outdated, proceeding with install", {
         pkg: "@opencode-ai/plugin",
         cachedVersion: depVersion,

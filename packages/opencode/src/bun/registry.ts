@@ -9,7 +9,18 @@ export namespace PackageRegistry {
     return process.execPath
   }
 
+  export function online() {
+    const nav = globalThis.navigator
+    if (!nav || typeof nav.onLine !== "boolean") return true
+    return nav.onLine
+  }
+
   export async function info(pkg: string, field: string, cwd?: string): Promise<string | null> {
+    if (!online()) {
+      log.debug("offline, skipping bun info", { pkg, field })
+      return null
+    }
+
     const { code, stdout, stderr } = await Process.run([which(), "info", pkg, field], {
       cwd,
       env: {
