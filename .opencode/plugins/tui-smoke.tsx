@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import mytheme from "../themes/mytheme.json" with { type: "json" }
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import { VignetteEffect, type RGBA } from "@opentui/core"
+import { extend, useKeyboard, useTerminalDimensions, type RenderableConstructor } from "@opentui/solid"
+import { RGBA, VignetteEffect, type OptimizedBuffer, type RenderContext } from "@opentui/core"
+import { ThreeRenderable, THREE } from "@opentui/core/3d"
 import type { TuiApi, TuiPluginInput } from "@opencode-ai/plugin/tui"
 
 const tabs = ["overview", "counter", "help"]
@@ -67,6 +68,65 @@ const tone = (api: TuiApi) => {
 }
 
 type Skin = ReturnType<typeof tone>
+
+class Cube extends ThreeRenderable {
+  private cube: THREE.Mesh
+
+  constructor(ctx: RenderContext, opts: ConstructorParameters<typeof ThreeRenderable>[1]) {
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
+    camera.position.set(0, 0, 2.55)
+
+    scene.add(new THREE.AmbientLight(new THREE.Color(0.4, 0.4, 0.4), 1.0))
+
+    const key = new THREE.DirectionalLight(new THREE.Color(1.0, 0.95, 0.9), 1.2)
+    key.position.set(2.5, 2.0, 3.0)
+    scene.add(key)
+
+    const fill = new THREE.DirectionalLight(new THREE.Color(0.5, 0.7, 1.0), 0.6)
+    fill.position.set(-2.0, -1.5, 2.5)
+    scene.add(fill)
+
+    const geo = new THREE.BoxGeometry(1.0, 1.0, 1.0)
+    const mat = new THREE.MeshPhongMaterial({
+      color: new THREE.Color(0.25, 0.8, 1.0),
+      shininess: 80,
+      specular: new THREE.Color(0.9, 0.9, 1.0),
+    })
+    const cube = new THREE.Mesh(geo, mat)
+    cube.scale.setScalar(1.12)
+    scene.add(cube)
+
+    super(ctx, {
+      ...opts,
+      scene,
+      camera,
+      renderer: {
+        focalLength: 8,
+        alpha: true,
+        backgroundColor: RGBA.fromValues(0, 0, 0, 0),
+      },
+    })
+
+    this.cube = cube
+  }
+
+  protected override renderSelf(buf: OptimizedBuffer, dt: number): void {
+    const delta = dt / 1000
+    this.cube.rotation.x += delta * 0.6
+    this.cube.rotation.y += delta * 0.4
+    this.cube.rotation.z += delta * 0.2
+    super.renderSelf(buf, dt)
+  }
+}
+
+declare module "@opentui/solid" {
+  interface OpenTUIComponents {
+    smoke_cube: RenderableConstructor
+  }
+}
+
+extend({ smoke_cube: Cube as unknown as RenderableConstructor })
 
 const Btn = (props: { txt: string; run: () => void; skin: Skin; on?: boolean }) => {
   return (
@@ -494,12 +554,8 @@ const slot = (input: ReturnType<typeof cfg>) => ({
         </box>
       )
     },
-    sidebar_top(ctx, value) {
-      return (
-        <text>
-          plugin:{input.label} session:{value.session_id.slice(0, 8)} ready:{String(ctx.theme.ready)}
-        </text>
-      )
+    sidebar_top(_ctx, value) {
+      return <smoke_cube id={`smoke-cube-${value.session_id.slice(0, 8)}`} width="100%" height={16} />
     },
   },
 })
