@@ -112,22 +112,32 @@ export namespace TuiPlugin {
       fn: async () => {
         const config = await TuiConfig.get()
         const plugins = config.plugin ?? []
-        if (plugins.length) await TuiConfig.waitForDependencies()
+        let deps: Promise<void> | undefined
+        const wait = async () => {
+          if (deps) {
+            await deps
+            return
+          }
+          deps = TuiConfig.waitForDependencies().catch((error) => {
+            log.warn("failed waiting for tui plugin dependencies", { error })
+          })
+          await deps
+        }
 
-        for (const item of plugins) {
+        const loadOne = async (item: (typeof plugins)[number], retry = false) => {
           const spec = Config.pluginSpecifier(item)
-          log.info("loading tui plugin", { path: spec })
+          log.info("loading tui plugin", { path: spec, retry })
           const target = await resolvePluginTarget(spec).catch((error) => {
-            log.error("failed to resolve tui plugin", { path: spec, error })
+            log.error("failed to resolve tui plugin", { path: spec, retry, error })
             return
           })
-          if (!target) continue
+          if (!target) return false
 
           const mod = await import(target).catch((error) => {
-            log.error("failed to load tui plugin", { path: spec, error })
+            log.error("failed to load tui plugin", { path: spec, retry, error })
             return
           })
-          if (!mod) continue
+          if (!mod) return false
 
           for (const [name, entry] of uniqueModuleEntries(mod)) {
             if (!entry || typeof entry !== "object") {
@@ -149,6 +159,19 @@ export namespace TuiPlugin {
             if (!tuiPlugin) continue
             await tuiPlugin(input, Config.pluginOptions(item))
           }
+
+          return true
+        }
+
+        for (const item of plugins) {
+          const ok = await loadOne(item)
+          if (ok) continue
+
+          const spec = Config.pluginSpecifier(item)
+          if (!spec.startsWith("file://")) continue
+
+          await wait()
+          await loadOne(item, true)
         }
       },
     }).catch((error) => {
