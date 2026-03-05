@@ -53,40 +53,6 @@ const current = (api: TuiApi, route: ReturnType<typeof names>) => {
   return parse(value.params)
 }
 
-const nav = (api: TuiApi, name: string, params: Record<string, unknown> | undefined, from: string) => {
-  console.log("[smoke] nav", {
-    from,
-    to: name,
-    params,
-    current: api.route.current,
-  })
-  api.route.navigate(name, params)
-}
-
-const key = (api: TuiApi, where: string, evt: any) => {
-  console.log("[smoke] key", {
-    where,
-    current: api.route.current.name,
-    name: evt.name,
-    ctrl: evt.ctrl,
-    meta: evt.meta,
-    shift: evt.shift,
-    leader: evt.leader,
-    defaultPrevented: evt.defaultPrevented,
-    eventType: evt.eventType,
-  })
-}
-
-const Probe = (props: { api: TuiApi; route: ReturnType<typeof names> }) => {
-  useKeyboard((evt) => {
-    const name = props.api.route.current.name
-    if (name !== props.route.screen && name !== props.route.modal) return
-    key(props.api, "probe", evt)
-  })
-
-  return null
-}
-
 const Screen = (props: {
   api: TuiApi
   input: ReturnType<typeof cfg>
@@ -96,14 +62,7 @@ const Screen = (props: {
   const dim = useTerminalDimensions()
   const value = parse(props.params)
 
-  console.log("[smoke] render", {
-    view: "screen",
-    current: props.api.route.current,
-    params: props.params,
-  })
-
   useKeyboard((evt) => {
-    key(props.api, "screen", evt)
     if (props.api.route.current.name !== props.route.screen) return
 
     const next = current(props.api, props.route)
@@ -111,42 +70,42 @@ const Screen = (props: {
     if (evt.name === "escape" || (evt.ctrl && evt.name === "h")) {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, "home", undefined, "screen:escape")
+      props.api.route.navigate("home")
       return
     }
 
     if (evt.name === "left" || evt.name === "h") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.screen, { ...next, tab: (next.tab - 1 + tabs.length) % tabs.length }, "screen:left")
+      props.api.route.navigate(props.route.screen, { ...next, tab: (next.tab - 1 + tabs.length) % tabs.length })
       return
     }
 
     if (evt.name === "right" || evt.name === "l") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.screen, { ...next, tab: (next.tab + 1) % tabs.length }, "screen:right")
+      props.api.route.navigate(props.route.screen, { ...next, tab: (next.tab + 1) % tabs.length })
       return
     }
 
     if (evt.name === "up" || evt.name === "k") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.screen, { ...next, count: next.count + 1 }, "screen:up")
+      props.api.route.navigate(props.route.screen, { ...next, count: next.count + 1 })
       return
     }
 
     if (evt.name === "down" || evt.name === "j") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.screen, { ...next, count: next.count - 1 }, "screen:down")
+      props.api.route.navigate(props.route.screen, { ...next, count: next.count - 1 })
       return
     }
 
     if (evt.ctrl && evt.name === "m") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.modal, next, "screen:ctrl+m")
+      props.api.route.navigate(props.route.modal, next)
     }
   })
 
@@ -174,7 +133,7 @@ const Screen = (props: {
             const on = value.tab === i
             return (
               <box
-                onMouseUp={() => nav(props.api, props.route.screen, { ...value, tab: i }, "screen:click-tab")}
+                onMouseUp={() => props.api.route.navigate(props.route.screen, { ...value, tab: i })}
                 backgroundColor={on ? ui.accent : ui.border}
                 paddingLeft={1}
                 paddingRight={1}
@@ -219,7 +178,7 @@ const Screen = (props: {
 
         <box flexDirection="row" gap={1} paddingTop={1}>
           <box
-            onMouseUp={() => nav(props.api, "home", undefined, "screen:click-home")}
+            onMouseUp={() => props.api.route.navigate("home")}
             backgroundColor={ui.border}
             paddingLeft={1}
             paddingRight={1}
@@ -227,7 +186,7 @@ const Screen = (props: {
             <text fg={ui.text}>go home</text>
           </box>
           <box
-            onMouseUp={() => nav(props.api, props.route.modal, value, "screen:click-modal")}
+            onMouseUp={() => props.api.route.navigate(props.route.modal, value)}
             backgroundColor={ui.accent}
             paddingLeft={1}
             paddingRight={1}
@@ -249,33 +208,26 @@ const Modal = (props: {
   const Dialog = props.api.ui.Dialog
   const value = parse(props.params)
 
-  console.log("[smoke] render", {
-    view: "modal",
-    current: props.api.route.current,
-    params: props.params,
-  })
-
   useKeyboard((evt) => {
-    key(props.api, "modal", evt)
     if (props.api.route.current.name !== props.route.modal) return
 
     if (evt.name === "return" || evt.name === "enter") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, props.route.screen, { ...value, source: "modal" }, "modal:enter")
+      props.api.route.navigate(props.route.screen, { ...value, source: "modal" })
       return
     }
 
     if (evt.name === "escape") {
       evt.preventDefault()
       evt.stopPropagation()
-      nav(props.api, "home", undefined, "modal:escape")
+      props.api.route.navigate("home")
     }
   })
 
   return (
     <box width="100%" height="100%" backgroundColor={ui.panel}>
-      <Dialog onClose={() => nav(props.api, "home", undefined, "modal:onClose")}>
+      <Dialog onClose={() => props.api.route.navigate("home")}>
         <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
           <text fg={ui.text}>
             <b>{props.input.label} modal</b>
@@ -285,7 +237,7 @@ const Modal = (props: {
           <text fg={ui.muted}>enter opens screen · esc closes</text>
           <box flexDirection="row" gap={1}>
             <box
-              onMouseUp={() => nav(props.api, props.route.screen, { ...value, source: "modal" }, "modal:click-open")}
+              onMouseUp={() => props.api.route.navigate(props.route.screen, { ...value, source: "modal" })}
               backgroundColor={ui.accent}
               paddingLeft={1}
               paddingRight={1}
@@ -293,7 +245,7 @@ const Modal = (props: {
               <text fg={ui.text}>open screen</text>
             </box>
             <box
-              onMouseUp={() => nav(props.api, "home", undefined, "modal:click-cancel")}
+              onMouseUp={() => props.api.route.navigate("home")}
               backgroundColor={ui.border}
               paddingLeft={1}
               paddingRight={1}
@@ -307,12 +259,9 @@ const Modal = (props: {
   )
 }
 
-const slot = (api: TuiApi, input: ReturnType<typeof cfg>, route: ReturnType<typeof names>) => ({
+const slot = (input: ReturnType<typeof cfg>) => ({
   id: "workspace-smoke",
   slots: {
-    app() {
-      return <Probe api={api} route={route} />
-    },
     home_logo() {
       return <text>plugin logo:{input.label}</text>
     },
@@ -338,8 +287,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
         name: "smoke",
       },
       onSelect: () => {
-        console.log("[smoke] command", { value: "plugin.smoke.modal", current: api.route.current })
-        nav(api, route.modal, { source: "command" }, "command:modal")
+        api.route.navigate(route.modal, { source: "command" })
       },
     },
     {
@@ -351,8 +299,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
         name: "smoke-screen",
       },
       onSelect: () => {
-        console.log("[smoke] command", { value: "plugin.smoke.screen", current: api.route.current })
-        nav(api, route.screen, { source: "command", tab: 0, count: 0 }, "command:screen")
+        api.route.navigate(route.screen, { source: "command", tab: 0, count: 0 })
       },
     },
     {
@@ -361,8 +308,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
       category: "Plugin",
       enabled: api.route.current.name !== "home",
       onSelect: () => {
-        console.log("[smoke] command", { value: "plugin.smoke.home", current: api.route.current })
-        nav(api, "home", undefined, "command:home")
+        api.route.navigate("home")
       },
     },
     {
@@ -370,7 +316,6 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
       value: "plugin.smoke.toast",
       category: "Plugin",
       onSelect: () => {
-        console.log("[smoke] command", { value: "plugin.smoke.toast", current: api.route.current })
         api.ui.toast({
           variant: "info",
           title: "Smoke",
@@ -392,14 +337,6 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
   const value = cfg(options)
   const route = names(value)
 
-  console.log("[smoke] init", {
-    route,
-    keybind: {
-      modal: value.modal,
-      screen: value.screen,
-    },
-  })
-
   input.api.route.register([
     {
       name: route.screen,
@@ -411,10 +348,8 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
     },
   ])
 
-  console.log("[smoke] routes registered", route)
-
   reg(input.api, value)
-  input.slots.register(slot(input.api, value, route))
+  input.slots.register(slot(value))
 }
 
 export default {

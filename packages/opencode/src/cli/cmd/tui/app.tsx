@@ -41,6 +41,9 @@ import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
+import { DialogConfirm } from "./ui/dialog-confirm"
+import { DialogPrompt } from "./ui/dialog-prompt"
+import { DialogSelect } from "./ui/dialog-select"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
@@ -239,7 +242,7 @@ function App() {
     return routes.get(name)?.at(-1)?.render
   }
 
-  const api: TuiApi = {
+  const api: TuiApi<JSX.Element> = {
     command: {
       register(cb) {
         command.register(() => cb())
@@ -309,6 +312,59 @@ function App() {
           <DialogUI size={props.size} onClose={props.onClose}>
             {props.children as JSX.Element}
           </DialogUI>
+        )
+      },
+      DialogAlert(props) {
+        return <DialogAlert {...props} />
+      },
+      DialogConfirm(props) {
+        return <DialogConfirm {...props} />
+      },
+      DialogPrompt(props) {
+        return <DialogPrompt {...props} description={props.description as (() => JSX.Element) | undefined} />
+      },
+      DialogSelect(props) {
+        const list = props.options.map((item) => ({
+          ...item,
+          footer: item.footer as JSX.Element | string | undefined,
+          onSelect: () => item.onSelect?.(),
+        }))
+        return (
+          <DialogSelect
+            title={props.title}
+            placeholder={props.placeholder}
+            options={list}
+            flat={props.flat}
+            onMove={
+              props.onMove
+                ? (item) =>
+                    props.onMove?.({
+                      title: item.title,
+                      value: item.value,
+                      description: item.description,
+                      footer: item.footer,
+                      category: item.category,
+                      disabled: item.disabled,
+                    })
+                : undefined
+            }
+            onFilter={props.onFilter}
+            onSelect={
+              props.onSelect
+                ? (item) =>
+                    props.onSelect?.({
+                      title: item.title,
+                      value: item.value,
+                      description: item.description,
+                      footer: item.footer,
+                      category: item.category,
+                      disabled: item.disabled,
+                    })
+                : undefined
+            }
+            skipFilter={props.skipFilter}
+            current={props.current}
+          />
         )
       },
       toast(input) {

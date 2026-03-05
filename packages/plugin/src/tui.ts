@@ -74,6 +74,50 @@ export type TuiDialogProps<Node = unknown> = {
   children?: Node
 }
 
+export type TuiDialogAlertProps = {
+  title: string
+  message: string
+  onConfirm?: () => void
+}
+
+export type TuiDialogConfirmProps = {
+  title: string
+  message: string
+  onConfirm?: () => void
+  onCancel?: () => void
+}
+
+export type TuiDialogPromptProps<Node = unknown> = {
+  title: string
+  description?: () => Node
+  placeholder?: string
+  value?: string
+  onConfirm?: (value: string) => void
+  onCancel?: () => void
+}
+
+export type TuiDialogSelectOption<Value = unknown, Node = unknown> = {
+  title: string
+  value: Value
+  description?: string
+  footer?: Node | string
+  category?: string
+  disabled?: boolean
+  onSelect?: () => void
+}
+
+export type TuiDialogSelectProps<Value = unknown, Node = unknown> = {
+  title: string
+  placeholder?: string
+  options: TuiDialogSelectOption<Value, Node>[]
+  flat?: boolean
+  onMove?: (option: TuiDialogSelectOption<Value, Node>) => void
+  onFilter?: (query: string) => void
+  onSelect?: (option: TuiDialogSelectOption<Value, Node>) => void
+  skipFilter?: boolean
+  current?: Value
+}
+
 export type TuiToast = {
   variant?: "info" | "success" | "warning" | "error"
   title?: string
@@ -93,6 +137,10 @@ export type TuiApi<Node = unknown> = {
   }
   ui: {
     Dialog: (props: TuiDialogProps<Node>) => Node
+    DialogAlert: (props: TuiDialogAlertProps) => Node
+    DialogConfirm: (props: TuiDialogConfirmProps) => Node
+    DialogPrompt: (props: TuiDialogPromptProps<Node>) => Node
+    DialogSelect: <Value = unknown>(props: TuiDialogSelectProps<Value, Node>) => Node
     toast: (input: TuiToast) => void
   }
   keybind: {

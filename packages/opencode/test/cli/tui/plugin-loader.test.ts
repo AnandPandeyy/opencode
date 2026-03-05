@@ -111,6 +111,10 @@ test("ignores function-only tui exports and loads object exports", async () => {
         },
         ui: {
           Dialog: () => null,
+          DialogAlert: () => null,
+          DialogConfirm: () => null,
+          DialogPrompt: () => null,
+          DialogSelect: () => null,
           toast: () => {},
         },
         keybind: {
