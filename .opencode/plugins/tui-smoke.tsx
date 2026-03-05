@@ -490,10 +490,40 @@ const slot = (input: ReturnType<typeof cfg>) => ({
   id: "workspace-smoke",
   slots: {
     home_logo(ctx) {
+      const map = ctx.theme.current as Record<string, unknown>
+      const get = (name: string, fallback: string) => {
+        const value = map[name]
+        if (typeof value === "string") return value
+        if (value && typeof value === "object") return value as RGBA
+        return fallback
+      }
+      const art = [
+        "                                  $$\\",
+        "                                  $$ |",
+        " $$$$$$$\\ $$$$$$\\$$$$\\   $$$$$$\\  $$ |  $$\\  $$$$$$\\",
+        "$$  _____|$$  _$$  _$$\\ $$  __$$\\ $$ | $$  |$$  __$$\\",
+        "\\$$$$$$\\  $$ / $$ / $$ |$$ /  $$ |$$$$$$  / $$$$$$$$ |",
+        " \\____$$\\ $$ | $$ | $$ |$$ |  $$ |$$  _$$<  $$   ____|",
+        "$$$$$$$  |$$ | $$ | $$ |\\$$$$$$  |$$ | \\$$\\ \\$$$$$$$\\",
+        "\\_______/ \\__| \\__| \\__| \\______/ \\__|  \\__| \\_______|",
+      ]
+      const ink = [
+        get("primary", ui.accent),
+        get("textMuted", ui.muted),
+        get("info", ui.accent),
+        get("text", ui.text),
+        get("success", ui.accent),
+        get("warning", ui.accent),
+        get("secondary", ui.accent),
+        get("error", ui.accent),
+      ]
+
       return (
-        <text>
-          plugin logo:{input.label} theme:{ctx.theme.selected}/{ctx.theme.mode()}
-        </text>
+        <box flexDirection="column">
+          {art.map((line, i) => (
+            <text fg={ink[i]}>{line}</text>
+          ))}
+        </box>
       )
     },
     sidebar_top(ctx, value) {
