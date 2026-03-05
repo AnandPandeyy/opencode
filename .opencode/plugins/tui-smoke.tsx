@@ -431,6 +431,7 @@ const AlertDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; para
   const Dialog = props.api.ui.Dialog
   const DialogAlert = props.api.ui.DialogAlert
   const value = parse(props.params)
+  const skin = tone(props.api)
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.alert) return
@@ -441,7 +442,7 @@ const AlertDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; para
   })
 
   return (
-    <box width="100%" height="100%" backgroundColor={ui.panel}>
+    <box width="100%" height="100%" backgroundColor={skin.panel}>
       <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
         <DialogAlert
           title="Smoke alert"
@@ -457,6 +458,7 @@ const ConfirmDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; pa
   const Dialog = props.api.ui.Dialog
   const DialogConfirm = props.api.ui.DialogConfirm
   const value = parse(props.params)
+  const skin = tone(props.api)
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.confirm) return
@@ -467,7 +469,7 @@ const ConfirmDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; pa
   })
 
   return (
-    <box width="100%" height="100%" backgroundColor={ui.panel}>
+    <box width="100%" height="100%" backgroundColor={skin.panel}>
       <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
         <DialogConfirm
           title="Smoke confirm"
@@ -486,6 +488,7 @@ const PromptDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
   const Dialog = props.api.ui.Dialog
   const DialogPrompt = props.api.ui.DialogPrompt
   const value = parse(props.params)
+  const skin = tone(props.api)
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.prompt) return
@@ -496,11 +499,11 @@ const PromptDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
   })
 
   return (
-    <box width="100%" height="100%" backgroundColor={ui.panel}>
+    <box width="100%" height="100%" backgroundColor={skin.panel}>
       <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
         <DialogPrompt
           title="Smoke prompt"
-          description={() => <text fg={ui.muted}>Enter a note to store in route params</text>}
+          description={() => <text fg={skin.muted}>Enter a note to store in route params</text>}
           value={value.note}
           onConfirm={(note) => props.api.route.navigate(props.route.screen, { ...value, note, source: "prompt" })}
           onCancel={() => props.api.route.navigate(props.route.screen, value)}
@@ -514,6 +517,7 @@ const SelectDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
   const Dialog = props.api.ui.Dialog
   const DialogSelect = props.api.ui.DialogSelect
   const value = parse(props.params)
+  const skin = tone(props.api)
   const options = [
     {
       title: "Overview",
@@ -541,7 +545,7 @@ const SelectDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
   })
 
   return (
-    <box width="100%" height="100%" backgroundColor={ui.panel}>
+    <box width="100%" height="100%" backgroundColor={skin.panel}>
       <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
         <DialogSelect
           title="Smoke select"
