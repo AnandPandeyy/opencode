@@ -68,30 +68,53 @@ const tone = (api: TuiApi) => {
 }
 
 type Skin = ReturnType<typeof tone>
+type CubeOpts = ConstructorParameters<typeof ThreeRenderable>[1] & {
+  tint?: Color
+  spec?: Color
+  ambient?: Color
+  key_light?: Color
+  fill_light?: Color
+}
+
+const rgb = (value: unknown, fallback: string) => {
+  if (typeof value === "string") return new THREE.Color(value)
+  if (value && typeof value === "object") {
+    const item = value as { r?: unknown; g?: unknown; b?: unknown }
+    if (typeof item.r === "number" && typeof item.g === "number" && typeof item.b === "number") {
+      return new THREE.Color(item.r, item.g, item.b)
+    }
+  }
+  return new THREE.Color(fallback)
+}
 
 class Cube extends ThreeRenderable {
   private cube: THREE.Mesh
+  private mat: THREE.MeshPhongMaterial
+  private amb: THREE.AmbientLight
+  private key: THREE.DirectionalLight
+  private fill: THREE.DirectionalLight
 
-  constructor(ctx: RenderContext, opts: ConstructorParameters<typeof ThreeRenderable>[1]) {
+  constructor(ctx: RenderContext, opts: CubeOpts) {
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
     camera.position.set(0, 0, 2.55)
 
-    scene.add(new THREE.AmbientLight(new THREE.Color(0.4, 0.4, 0.4), 1.0))
+    const amb = new THREE.AmbientLight(rgb(opts.ambient, "#666666"), 1.0)
+    scene.add(amb)
 
-    const key = new THREE.DirectionalLight(new THREE.Color(1.0, 0.95, 0.9), 1.2)
+    const key = new THREE.DirectionalLight(rgb(opts.key_light, "#fff2e6"), 1.2)
     key.position.set(2.5, 2.0, 3.0)
     scene.add(key)
 
-    const fill = new THREE.DirectionalLight(new THREE.Color(0.5, 0.7, 1.0), 0.6)
+    const fill = new THREE.DirectionalLight(rgb(opts.fill_light, "#80b3ff"), 0.6)
     fill.position.set(-2.0, -1.5, 2.5)
     scene.add(fill)
 
     const geo = new THREE.BoxGeometry(1.0, 1.0, 1.0)
     const mat = new THREE.MeshPhongMaterial({
-      color: new THREE.Color(0.25, 0.8, 1.0),
+      color: rgb(opts.tint, "#40ccff"),
       shininess: 80,
-      specular: new THREE.Color(0.9, 0.9, 1.0),
+      specular: rgb(opts.spec, "#e6e6ff"),
     })
     const cube = new THREE.Mesh(geo, mat)
     cube.scale.setScalar(1.12)
@@ -109,6 +132,30 @@ class Cube extends ThreeRenderable {
     })
 
     this.cube = cube
+    this.mat = mat
+    this.amb = amb
+    this.key = key
+    this.fill = fill
+  }
+
+  set tint(value: Color | undefined) {
+    this.mat.color.copy(rgb(value, "#40ccff"))
+  }
+
+  set spec(value: Color | undefined) {
+    this.mat.specular.copy(rgb(value, "#e6e6ff"))
+  }
+
+  set ambient(value: Color | undefined) {
+    this.amb.color.copy(rgb(value, "#666666"))
+  }
+
+  set key_light(value: Color | undefined) {
+    this.key.color.copy(rgb(value, "#fff2e6"))
+  }
+
+  set fill_light(value: Color | undefined) {
+    this.fill.color.copy(rgb(value, "#80b3ff"))
   }
 
   protected override renderSelf(buf: OptimizedBuffer, dt: number): void {
@@ -554,8 +601,27 @@ const slot = (input: ReturnType<typeof cfg>) => ({
         </box>
       )
     },
-    sidebar_top(_ctx, value) {
-      return <smoke_cube id={`smoke-cube-${value.session_id.slice(0, 8)}`} width="100%" height={16} />
+    sidebar_top(ctx, value) {
+      const map = ctx.theme.current as Record<string, unknown>
+      const get = (name: string, fallback: string) => {
+        const item = map[name]
+        if (typeof item === "string") return item
+        if (item && typeof item === "object") return item as RGBA
+        return fallback
+      }
+
+      return (
+        <smoke_cube
+          id={`smoke-cube-${value.session_id.slice(0, 8)}`}
+          width="100%"
+          height={16}
+          tint={get("primary", ui.accent)}
+          spec={get("text", ui.text)}
+          ambient={get("textMuted", ui.muted)}
+          key_light={get("success", ui.accent)}
+          fill_light={get("info", ui.accent)}
+        />
+      )
     },
   },
 })
