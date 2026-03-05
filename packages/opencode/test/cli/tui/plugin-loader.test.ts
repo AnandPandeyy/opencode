@@ -102,20 +102,16 @@ test("ignores function-only tui exports and loads object exports", async () => {
           register: () => {},
           trigger: () => {},
         },
-        dialog: {
-          clear: () => {},
-          replace: () => {},
-          get depth() {
-            return 0
+        route: {
+          register: () => () => {},
+          navigate: () => {},
+          get current() {
+            return { name: "home" as const }
           },
         },
-        route: {
-          get data() {
-            return { type: "home" as const }
-          },
-          navigate: () => {},
-          home: () => {},
-          plugin: () => {},
+        ui: {
+          Dialog: () => null,
+          toast: () => {},
         },
         keybind: {
           parse: () => ({

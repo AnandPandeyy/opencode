@@ -1,13 +1,25 @@
-import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { render, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { createCliRenderer, MouseButton, TextAttributes, type CliRendererConfig, type ParsedKey } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, Show, on } from "solid-js"
+import {
+  Switch,
+  Match,
+  createEffect,
+  createMemo,
+  untrack,
+  ErrorBoundary,
+  createSignal,
+  onMount,
+  batch,
+  Show,
+  on,
+} from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
-import { DialogProvider, useDialog } from "@tui/ui/dialog"
+import { Dialog as DialogUI, DialogProvider, useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderList } from "@tui/component/dialog-provider"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
@@ -41,7 +53,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
-import type { TuiApi, TuiRoute } from "@opencode-ai/plugin/tui"
+import type { TuiApi, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
 import { TuiPlugin } from "./plugin"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
@@ -220,6 +232,13 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const routes = new Map<string, { key: symbol; render: TuiRouteDefinition["render"] }[]>()
+  const [rev, setRev] = createSignal(0)
+  const view = (name: string) => {
+    rev()
+    return routes.get(name)?.at(-1)?.render
+  }
+
   const api: TuiApi = {
     command: {
       register(cb) {
@@ -229,29 +248,76 @@ function App() {
         command.trigger(value)
       },
     },
-    dialog: {
-      clear() {
-        dialog.clear()
+    route: {
+      register(input) {
+        const key = Symbol()
+        for (const item of input) {
+          const list = routes.get(item.name) ?? []
+          list.push({ key, render: item.render })
+          routes.set(item.name, list)
+        }
+        setRev((x) => x + 1)
+        return () => {
+          for (const item of input) {
+            const list = routes.get(item.name)
+            if (!list) continue
+            routes.set(
+              item.name,
+              list.filter((x) => x.key !== key),
+            )
+            if (!routes.get(item.name)?.length) routes.delete(item.name)
+          }
+          setRev((x) => x + 1)
+        }
       },
-      replace(input, onClose) {
-        dialog.replace(input, onClose)
+      navigate(name, params) {
+        if (name === "home") {
+          route.navigate({ type: "home" })
+          return
+        }
+
+        if (name === "session") {
+          const sessionID = params?.sessionID
+          if (typeof sessionID !== "string") return
+          route.navigate({ type: "session", sessionID })
+          return
+        }
+
+        route.navigate({ type: "plugin", id: name, data: params })
       },
-      get depth() {
-        return dialog.stack.length
+      get current() {
+        if (route.data.type === "home") return { name: "home" }
+        if (route.data.type === "session") {
+          return {
+            name: "session",
+            params: {
+              sessionID: route.data.sessionID,
+              initialPrompt: route.data.initialPrompt,
+            },
+          }
+        }
+
+        return {
+          name: route.data.id,
+          params: route.data.data,
+        }
       },
     },
-    route: {
-      get data() {
-        return route.data
+    ui: {
+      Dialog(props) {
+        return (
+          <DialogUI size={props.size} onClose={props.onClose}>
+            {props.children as JSX.Element}
+          </DialogUI>
+        )
       },
-      navigate(next: TuiRoute) {
-        route.navigate(next)
-      },
-      home() {
-        route.navigate({ type: "home" })
-      },
-      plugin(id, data) {
-        route.navigate({ type: "plugin", id, data })
+      toast(input) {
+        toast.show({
+          title: input.title,
+          message: input.message,
+          variant: input.variant ?? "info",
+          duration: input.duration,
+        })
       },
     },
     keybind: {
@@ -803,10 +869,12 @@ function App() {
     })
   })
 
-  const plugin = () => {
+  const plugin = createMemo(() => {
     if (route.data.type !== "plugin") return
-    return route.data
-  }
+    const render = view(route.data.id)
+    if (!render) return <PluginRouteMissing id={route.data.id} onHome={() => route.navigate({ type: "home" })} />
+    return render({ params: route.data.data })
+  })
 
   return (
     <box
@@ -831,13 +899,7 @@ function App() {
           <Session />
         </Match>
       </Switch>
-      <Show when={plugin()}>
-        {(item) => (
-          <TuiPlugin.Slot name="route" mode="replace" route_id={item().id} data={item().data}>
-            <PluginRouteMissing id={item().id} onHome={() => route.navigate({ type: "home" })} />
-          </TuiPlugin.Slot>
-        )}
-      </Show>
+      {plugin()}
       <TuiPlugin.Slot name="app" />
     </box>
   )

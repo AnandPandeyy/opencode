@@ -22,19 +22,26 @@ export type ThemeJson = {
   }
 }
 
-export type TuiRoute =
+export type TuiRouteCurrent =
   | {
-      type: "home"
+      name: "home"
     }
   | {
-      type: "session"
-      sessionID: string
+      name: "session"
+      params: {
+        sessionID: string
+        initialPrompt?: unknown
+      }
     }
   | {
-      type: "plugin"
-      id: string
-      data?: Record<string, unknown>
+      name: string
+      params?: Record<string, unknown>
     }
+
+export type TuiRouteDefinition<Node = unknown> = {
+  name: string
+  render: (input: { params?: Record<string, unknown> }) => Node
+}
 
 export type TuiCommand = {
   title: string
@@ -61,21 +68,32 @@ export type TuiKeybind = {
   leader: boolean
 }
 
+export type TuiDialogProps<Node = unknown> = {
+  size?: "medium" | "large"
+  onClose: () => void
+  children?: Node
+}
+
+export type TuiToast = {
+  variant?: "info" | "success" | "warning" | "error"
+  title?: string
+  message: string
+  duration?: number
+}
+
 export type TuiApi<Node = unknown> = {
   command: {
     register: (cb: () => TuiCommand[]) => void
     trigger: (value: string) => void
   }
-  dialog: {
-    clear: () => void
-    replace: (input: Node | (() => Node), onClose?: () => void) => void
-    readonly depth: number
-  }
   route: {
-    readonly data: TuiRoute
-    navigate: (route: TuiRoute) => void
-    home: () => void
-    plugin: (id: string, data?: Record<string, unknown>) => void
+    register: (routes: TuiRouteDefinition<Node>[]) => () => void
+    navigate: (name: string, params?: Record<string, unknown>) => void
+    readonly current: TuiRouteCurrent
+  }
+  ui: {
+    Dialog: (props: TuiDialogProps<Node>) => Node
+    toast: (input: TuiToast) => void
   }
   keybind: {
     parse: (evt: ParsedKey) => TuiKeybind
@@ -89,10 +107,6 @@ export type TuiApi<Node = unknown> = {
 
 export type TuiSlotMap = {
   app: {}
-  route: {
-    route_id: string
-    data?: Record<string, unknown>
-  }
   home_logo: {}
   sidebar_top: {
     session_id: string
