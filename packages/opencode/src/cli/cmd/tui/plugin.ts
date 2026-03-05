@@ -68,10 +68,12 @@ export namespace TuiPlugin {
 
   export const Slot: Slot = (props) => view(props)
 
-  function setupSlots(renderer: CliRenderer): TuiSlots {
+  function setupSlots(input: InitInput): TuiSlots {
     const reg = createSolidSlotRegistry<TuiSlotMap, TuiSlotContext>(
-      renderer,
-      {},
+      input.renderer,
+      {
+        theme: input.api.theme,
+      },
       {
         onPluginError(event) {
           console.error("[tui.slot] plugin error", {
@@ -99,7 +101,7 @@ export namespace TuiPlugin {
     if (loaded) return loaded
     loaded = load({
       ...input,
-      slots: setupSlots(input.renderer),
+      slots: setupSlots(input),
     })
     return loaded
   }

@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import mytheme from "../themes/mytheme.json" with { type: "json" }
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
+import type { RGBA } from "@opentui/core"
 import type { TuiApi, TuiPluginInput } from "@opencode-ai/plugin/tui"
 
 const tabs = ["overview", "counter", "help"]
@@ -39,6 +40,26 @@ const ui = {
   accent: "#5f87ff",
 }
 
+type Color = RGBA | string
+
+const tone = (api: TuiApi) => {
+  const map = api.theme.current as Record<string, unknown>
+  const get = (name: string, fallback: string): Color => {
+    const value = map[name]
+    if (typeof value === "string") return value
+    if (value && typeof value === "object") return value as RGBA
+    return fallback
+  }
+  return {
+    panel: get("backgroundPanel", ui.panel),
+    border: get("border", ui.border),
+    text: get("text", ui.text),
+    muted: get("textMuted", ui.muted),
+    accent: get("primary", ui.accent),
+    selected: get("selectedListItemText", ui.text),
+  }
+}
+
 const parse = (params: Record<string, unknown> | undefined) => {
   const tab = typeof params?.tab === "number" ? params.tab : 0
   const count = typeof params?.count === "number" ? params.count : 0
@@ -70,6 +91,7 @@ const Screen = (props: {
 }) => {
   const dim = useTerminalDimensions()
   const value = parse(props.params)
+  const skin = tone(props.api)
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.screen) return
@@ -147,7 +169,7 @@ const Screen = (props: {
   })
 
   return (
-    <box width={dim().width} height={dim().height} backgroundColor={ui.panel}>
+    <box width={dim().width} height={dim().height} backgroundColor={skin.panel}>
       <box
         flexDirection="column"
         width="100%"
@@ -158,11 +180,11 @@ const Screen = (props: {
         paddingRight={2}
       >
         <box flexDirection="row" justifyContent="space-between" paddingBottom={1}>
-          <text fg={ui.text}>
+          <text fg={skin.text}>
             <b>{props.input.label} screen</b>
-            <span style={{ fg: ui.muted }}> plugin route</span>
+            <span style={{ fg: skin.muted }}> plugin route</span>
           </text>
-          <text fg={ui.muted}>esc or ctrl+h home</text>
+          <text fg={skin.muted}>esc or ctrl+h home</text>
         </box>
 
         <box flexDirection="row" gap={1} paddingBottom={1}>
@@ -171,11 +193,11 @@ const Screen = (props: {
             return (
               <box
                 onMouseUp={() => props.api.route.navigate(props.route.screen, { ...value, tab: i })}
-                backgroundColor={on ? ui.accent : ui.border}
+                backgroundColor={on ? skin.accent : skin.border}
                 paddingLeft={1}
                 paddingRight={1}
               >
-                <text fg={ui.text}>{item}</text>
+                <text fg={on ? skin.selected : skin.text}>{item}</text>
               </box>
             )
           })}
@@ -183,7 +205,7 @@ const Screen = (props: {
 
         <box
           border
-          borderColor={ui.border}
+          borderColor={skin.border}
           paddingTop={1}
           paddingBottom={1}
           paddingLeft={2}
@@ -192,24 +214,24 @@ const Screen = (props: {
         >
           {value.tab === 0 ? (
             <box flexDirection="column" gap={1}>
-              <text fg={ui.text}>Route: {props.route.screen}</text>
-              <text fg={ui.muted}>source: {value.source}</text>
-              <text fg={ui.muted}>note: {value.note || "(none)"}</text>
-              <text fg={ui.muted}>selected: {value.selected || "(none)"}</text>
+              <text fg={skin.text}>Route: {props.route.screen}</text>
+              <text fg={skin.muted}>source: {value.source}</text>
+              <text fg={skin.muted}>note: {value.note || "(none)"}</text>
+              <text fg={skin.muted}>selected: {value.selected || "(none)"}</text>
             </box>
           ) : null}
 
           {value.tab === 1 ? (
             <box flexDirection="column" gap={1}>
-              <text fg={ui.text}>Counter: {value.count}</text>
-              <text fg={ui.muted}>up/down or j/k change value</text>
+              <text fg={skin.text}>Counter: {value.count}</text>
+              <text fg={skin.muted}>up/down or j/k change value</text>
             </box>
           ) : null}
 
           {value.tab === 2 ? (
             <box flexDirection="column" gap={1}>
-              <text fg={ui.muted}>ctrl+m modal | a alert | c confirm | p prompt | s select</text>
-              <text fg={ui.muted}>esc or ctrl+h returns home</text>
+              <text fg={skin.muted}>ctrl+m modal | a alert | c confirm | p prompt | s select</text>
+              <text fg={skin.muted}>esc or ctrl+h returns home</text>
             </box>
           ) : null}
         </box>
@@ -217,51 +239,51 @@ const Screen = (props: {
         <box flexDirection="row" gap={1} paddingTop={1}>
           <box
             onMouseUp={() => props.api.route.navigate("home")}
-            backgroundColor={ui.border}
+            backgroundColor={skin.border}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>go home</text>
+            <text fg={skin.text}>go home</text>
           </box>
           <box
             onMouseUp={() => props.api.route.navigate(props.route.modal, value)}
-            backgroundColor={ui.accent}
+            backgroundColor={skin.accent}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>modal</text>
+            <text fg={skin.selected}>modal</text>
           </box>
           <box
             onMouseUp={() => props.api.route.navigate(props.route.alert, value)}
-            backgroundColor={ui.border}
+            backgroundColor={skin.border}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>alert</text>
+            <text fg={skin.text}>alert</text>
           </box>
           <box
             onMouseUp={() => props.api.route.navigate(props.route.confirm, value)}
-            backgroundColor={ui.border}
+            backgroundColor={skin.border}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>confirm</text>
+            <text fg={skin.text}>confirm</text>
           </box>
           <box
             onMouseUp={() => props.api.route.navigate(props.route.prompt, value)}
-            backgroundColor={ui.border}
+            backgroundColor={skin.border}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>prompt</text>
+            <text fg={skin.text}>prompt</text>
           </box>
           <box
             onMouseUp={() => props.api.route.navigate(props.route.select, value)}
-            backgroundColor={ui.border}
+            backgroundColor={skin.border}
             paddingLeft={1}
             paddingRight={1}
           >
-            <text fg={ui.text}>select</text>
+            <text fg={skin.text}>select</text>
           </box>
         </box>
       </box>
@@ -277,6 +299,7 @@ const Modal = (props: {
 }) => {
   const Dialog = props.api.ui.Dialog
   const value = parse(props.params)
+  const skin = tone(props.api)
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.modal) return
@@ -296,31 +319,31 @@ const Modal = (props: {
   })
 
   return (
-    <box width="100%" height="100%" backgroundColor={ui.panel}>
+    <box width="100%" height="100%" backgroundColor={skin.panel}>
       <Dialog onClose={() => props.api.route.navigate("home")}>
         <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
-          <text fg={ui.text}>
+          <text fg={skin.text}>
             <b>{props.input.label} modal</b>
           </text>
-          <text fg={ui.muted}>{props.api.keybind.print(props.input.modal)} modal command</text>
-          <text fg={ui.muted}>{props.api.keybind.print(props.input.screen)} screen command</text>
-          <text fg={ui.muted}>enter opens screen · esc closes</text>
+          <text fg={skin.muted}>{props.api.keybind.print(props.input.modal)} modal command</text>
+          <text fg={skin.muted}>{props.api.keybind.print(props.input.screen)} screen command</text>
+          <text fg={skin.muted}>enter opens screen · esc closes</text>
           <box flexDirection="row" gap={1}>
             <box
               onMouseUp={() => props.api.route.navigate(props.route.screen, { ...value, source: "modal" })}
-              backgroundColor={ui.accent}
+              backgroundColor={skin.accent}
               paddingLeft={1}
               paddingRight={1}
             >
-              <text fg={ui.text}>open screen</text>
+              <text fg={skin.selected}>open screen</text>
             </box>
             <box
               onMouseUp={() => props.api.route.navigate("home")}
-              backgroundColor={ui.border}
+              backgroundColor={skin.border}
               paddingLeft={1}
               paddingRight={1}
             >
-              <text fg={ui.text}>cancel</text>
+              <text fg={skin.text}>cancel</text>
             </box>
           </box>
         </box>
@@ -466,13 +489,17 @@ const SelectDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
 const slot = (input: ReturnType<typeof cfg>) => ({
   id: "workspace-smoke",
   slots: {
-    home_logo() {
-      return <text>plugin logo:{input.label}</text>
-    },
-    sidebar_top(_ctx, value) {
+    home_logo(ctx) {
       return (
         <text>
-          plugin:{input.label} session:{value.session_id.slice(0, 8)}
+          plugin logo:{input.label} theme:{ctx.theme.selected}/{ctx.theme.mode()}
+        </text>
+      )
+    },
+    sidebar_top(ctx, value) {
+      return (
+        <text>
+          plugin:{input.label} session:{value.session_id.slice(0, 8)} ready:{String(ctx.theme.ready)}
         </text>
       )
     },

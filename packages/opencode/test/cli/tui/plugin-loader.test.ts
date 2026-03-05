@@ -132,6 +132,15 @@ test("ignores function-only tui exports and loads object exports", async () => {
           get current() {
             return {}
           },
+          get selected() {
+            return "opencode"
+          },
+          mode() {
+            return "dark" as const
+          },
+          get ready() {
+            return true
+          },
         },
       },
     })

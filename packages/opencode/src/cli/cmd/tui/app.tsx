@@ -231,7 +231,8 @@ function App() {
   const keybind = useKeybind()
   const sdk = useSDK()
   const toast = useToast()
-  const { theme, mode, setMode } = useTheme()
+  const t = useTheme()
+  const { theme, mode, setMode } = t
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
@@ -390,6 +391,15 @@ function App() {
     theme: {
       get current() {
         return theme
+      },
+      get selected() {
+        return t.selected
+      },
+      mode() {
+        return t.mode()
+      },
+      get ready() {
+        return t.ready
       },
     },
   }

@@ -125,6 +125,13 @@ export type TuiToast = {
   duration?: number
 }
 
+export type TuiTheme = {
+  readonly current: Record<string, unknown>
+  readonly selected: string
+  mode: () => "dark" | "light"
+  readonly ready: boolean
+}
+
 export type TuiApi<Node = unknown> = {
   command: {
     register: (cb: () => TuiCommand[]) => void
@@ -148,9 +155,7 @@ export type TuiApi<Node = unknown> = {
     match: (key: string, evt: ParsedKey) => boolean
     print: (key: string) => string
   }
-  theme: {
-    readonly current: Record<string, unknown>
-  }
+  theme: TuiTheme
 }
 
 export type TuiSlotMap = {
@@ -161,7 +166,9 @@ export type TuiSlotMap = {
   }
 }
 
-export type TuiSlotContext = {}
+export type TuiSlotContext = {
+  theme: TuiTheme
+}
 
 export type TuiSlotPlugin<Node = unknown> = CorePlugin<Node, TuiSlotMap, TuiSlotContext>
 
