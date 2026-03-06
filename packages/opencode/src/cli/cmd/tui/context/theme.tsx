@@ -348,54 +348,48 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     function init() {
-      resolveSystemTheme()
-      getCustomThemes()
-        .then((custom) => {
-          setStore(
-            produce((draft) => {
-              Object.assign(draft.themes, custom)
-            }),
-          )
-        })
-        .catch(() => {
-          setStore("active", "opencode")
-        })
-        .finally(() => {
-          if (store.active !== "system") {
-            setStore("ready", true)
-          }
-        })
+      Promise.allSettled([
+        resolveSystemTheme(),
+        getCustomThemes()
+          .then((custom) => {
+            setStore(
+              produce((draft) => {
+                Object.assign(draft.themes, custom)
+              }),
+            )
+          })
+          .catch(() => {
+            setStore("active", "opencode")
+          }),
+      ]).finally(() => {
+        setStore("ready", true)
+      })
     }
 
     onMount(init)
 
     function resolveSystemTheme() {
-      console.log("resolveSystemTheme")
-      renderer
+      return renderer
         .getPalette({
           size: 16,
         })
         .then((colors) => {
-          console.log(colors.palette)
           if (!colors.palette[0]) {
             if (store.active === "system") {
-              setStore(
-                produce((draft) => {
-                  draft.active = "opencode"
-                  draft.ready = true
-                }),
-              )
+              setStore("active", "opencode")
             }
             return
           }
           setStore(
             produce((draft) => {
               draft.themes.system = generateSystem(colors, store.mode)
-              if (store.active === "system") {
-                draft.ready = true
-              }
             }),
           )
+        })
+        .catch(() => {
+          if (store.active === "system") {
+            setStore("active", "opencode")
+          }
         })
     }
 

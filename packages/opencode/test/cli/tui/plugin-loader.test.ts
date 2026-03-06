@@ -15,7 +15,7 @@ mock.module("@opentui/solid/jsx-runtime", () => ({
   jsxs: () => null,
   jsxDEV: () => null,
 }))
-const { allThemes } = await import("../../../src/cli/cmd/tui/context/theme")
+const { allThemes, addTheme } = await import("../../../src/cli/cmd/tui/context/theme")
 const { TuiPlugin } = await import("../../../src/cli/cmd/tui/plugin")
 
 async function waitForLog(text: string, timeout = 1000) {
@@ -45,22 +45,30 @@ test("loads plugin theme API with scoped theme installation", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       const localPluginPath = path.join(dir, "local-plugin.ts")
+      const preloadedPluginPath = path.join(dir, "preloaded-plugin.ts")
       const globalPluginPath = path.join(dir, "global-plugin.ts")
       const localThemeFile = `local-theme-${stamp}.json`
       const globalThemeFile = `global-theme-${stamp}.json`
+      const preloadedThemeFile = `preloaded-theme-${stamp}.json`
       const localThemeName = localThemeFile.replace(/\.json$/, "")
       const globalThemeName = globalThemeFile.replace(/\.json$/, "")
+      const preloadedThemeName = preloadedThemeFile.replace(/\.json$/, "")
       const localThemePath = path.join(dir, localThemeFile)
       const globalThemePath = path.join(dir, globalThemeFile)
+      const preloadedThemePath = path.join(dir, preloadedThemeFile)
       const localDest = path.join(dir, ".opencode", "themes", localThemeFile)
       const globalDest = path.join(Global.Path.config, "themes", globalThemeFile)
+      const preloadedDest = path.join(dir, ".opencode", "themes", preloadedThemeFile)
       const fnMarker = path.join(dir, "function-called.txt")
       const localMarker = path.join(dir, "local-called.json")
       const globalMarker = path.join(dir, "global-called.json")
+      const preloadedMarker = path.join(dir, "preloaded-called.json")
       const localConfigPath = path.join(dir, "tui.json")
 
       await Bun.write(localThemePath, JSON.stringify({ theme: { primary: "#101010" } }, null, 2))
       await Bun.write(globalThemePath, JSON.stringify({ theme: { primary: "#202020" } }, null, 2))
+      await Bun.write(preloadedThemePath, JSON.stringify({ theme: { primary: "#f0f0f0" } }, null, 2))
+      await Bun.write(preloadedDest, JSON.stringify({ theme: { primary: "#303030" } }, null, 2))
 
       await Bun.write(
         localPluginPath,
@@ -85,6 +93,21 @@ export const object_plugin = {
       options.marker,
       JSON.stringify({ before, set_missing, after, set_installed, selected: input.api.theme.selected, same: first === second }),
     )
+  },
+}
+`,
+      )
+
+      await Bun.write(
+        preloadedPluginPath,
+        `export default {
+  tui: async (input, options) => {
+    if (!options?.marker) return
+    const before = input.api.theme.has(options.theme_name)
+    await input.api.theme.install(options.theme_path)
+    const after = input.api.theme.has(options.theme_name)
+    const text = await Bun.file(options.dest).text()
+    await Bun.write(options.marker, JSON.stringify({ before, after, text }))
   },
 }
 `,
@@ -136,6 +159,15 @@ export const object_plugin = {
                   theme_name: localThemeName,
                 },
               ],
+              [
+                pathToFileURL(preloadedPluginPath).href,
+                {
+                  marker: preloadedMarker,
+                  dest: preloadedDest,
+                  theme_path: `./${preloadedThemeFile}`,
+                  theme_name: preloadedThemeName,
+                },
+              ],
             ],
           },
           null,
@@ -146,13 +178,17 @@ export const object_plugin = {
       return {
         localThemeFile,
         globalThemeFile,
+        preloadedThemeFile,
         localThemeName,
         globalThemeName,
+        preloadedThemeName,
         localDest,
         globalDest,
+        preloadedDest,
         fnMarker,
         localMarker,
         globalMarker,
+        preloadedMarker,
       }
     },
   })
@@ -168,6 +204,8 @@ export const object_plugin = {
   } satisfies CliRenderer
 
   try {
+    expect(addTheme(tmp.extra.preloadedThemeName, { theme: { primary: "#303030" } })).toBe(true)
+
     await TuiPlugin.init({
       client: createOpencodeClient({
         baseUrl: "http://localhost:4096",
@@ -248,6 +286,12 @@ export const object_plugin = {
     expect(global.set_installed).toBe(true)
     expect(global.selected).toBe(tmp.extra.globalThemeName)
 
+    const preloaded = JSON.parse(await fs.readFile(tmp.extra.preloadedMarker, "utf8"))
+    expect(preloaded.before).toBe(true)
+    expect(preloaded.after).toBe(true)
+    expect(preloaded.text).toContain("#303030")
+    expect(preloaded.text).not.toContain("#f0f0f0")
+
     await expect(fs.readFile(tmp.extra.fnMarker, "utf8")).rejects.toThrow()
 
     const localInstalled = await fs.readFile(tmp.extra.localDest, "utf8")
@@ -256,6 +300,10 @@ export const object_plugin = {
 
     const globalInstalled = await fs.readFile(tmp.extra.globalDest, "utf8")
     expect(globalInstalled).toContain("#202020")
+
+    const preloadedInstalled = await fs.readFile(tmp.extra.preloadedDest, "utf8")
+    expect(preloadedInstalled).toContain("#303030")
+    expect(preloadedInstalled).not.toContain("#f0f0f0")
 
     expect(
       await fs
