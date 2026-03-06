@@ -1,6 +1,6 @@
 import { SyntaxStyle, RGBA, type TerminalColors } from "@opentui/core"
 import path from "path"
-import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { createEffect, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { Glob } from "../../../../util/glob"
 import aura from "./theme/aura.json" with { type: "json" }
@@ -138,44 +138,6 @@ type ThemeJson = {
   }
 }
 
-type ThemeRegistry = {
-  themes: Record<string, ThemeJson>
-  listeners: Set<(themes: Record<string, ThemeJson>) => void>
-}
-
-const registry: ThemeRegistry = {
-  themes: {},
-  listeners: new Set(),
-}
-
-export function registerThemes(themes: Record<string, unknown>) {
-  const entries = Object.entries(themes).filter((entry): entry is [string, ThemeJson] => {
-    const theme = entry[1]
-    if (!theme || typeof theme !== "object") return false
-    if (!("theme" in theme)) return false
-    return true
-  })
-  if (entries.length === 0) return
-
-  for (const [name, theme] of entries) {
-    registry.themes[name] = theme
-  }
-
-  const payload = Object.fromEntries(entries)
-  for (const handler of registry.listeners) {
-    handler(payload)
-  }
-}
-
-function registeredThemes() {
-  return registry.themes
-}
-
-function onThemes(handler: (themes: Record<string, ThemeJson>) => void) {
-  registry.listeners.add(handler)
-  return () => registry.listeners.delete(handler)
-}
-
 export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   aura,
   ayu,
@@ -210,6 +172,46 @@ export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   vercel,
   zenburn,
   carbonfox,
+}
+
+type State = {
+  themes: Record<string, ThemeJson>
+  mode: "dark" | "light"
+  active: string
+  ready: boolean
+}
+
+const [store, setStore] = createStore<State>({
+  themes: DEFAULT_THEMES,
+  mode: "dark",
+  active: "opencode",
+  ready: false,
+})
+
+function mergeThemes(themes: Record<string, ThemeJson>) {
+  setStore(
+    produce((draft) => {
+      for (const [name, theme] of Object.entries(themes)) {
+        if (draft.themes[name]) continue
+        draft.themes[name] = theme
+      }
+    }),
+  )
+}
+
+export function allThemes() {
+  return store.themes
+}
+
+export function registerThemes(themes: Record<string, unknown>) {
+  const list = Object.entries(themes).filter((entry): entry is [string, ThemeJson] => {
+    const theme = entry[1]
+    if (!theme || typeof theme !== "object") return false
+    if (!("theme" in theme)) return false
+    return true
+  })
+  if (!list.length) return
+  mergeThemes(Object.fromEntries(list))
 }
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
@@ -320,12 +322,14 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   init: (props: { mode: "dark" | "light" }) => {
     const config = useTuiConfig()
     const kv = useKV()
-    const [store, setStore] = createStore({
-      themes: DEFAULT_THEMES,
-      mode: kv.get("theme_mode", props.mode),
-      active: (config.theme ?? kv.get("theme", "opencode")) as string,
-      ready: false,
-    })
+
+    setStore(
+      produce((draft) => {
+        draft.mode = kv.get("theme_mode", props.mode)
+        draft.active = (config.theme ?? kv.get("theme", "opencode")) as string
+        draft.ready = false
+      }),
+    )
 
     createEffect(() => {
       const theme = config.theme
@@ -334,7 +338,6 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
 
     function init() {
       resolveSystemTheme()
-      mergeThemes(registeredThemes())
       getCustomThemes()
         .then((custom) => {
           setStore(
@@ -354,22 +357,6 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     }
 
     onMount(init)
-    onCleanup(
-      onThemes((themes) => {
-        mergeThemes(themes)
-      }),
-    )
-
-    function mergeThemes(themes: Record<string, ThemeJson>) {
-      setStore(
-        produce((draft) => {
-          for (const [name, theme] of Object.entries(themes)) {
-            if (draft.themes[name]) continue
-            draft.themes[name] = theme
-          }
-        }),
-      )
-    }
 
     function resolveSystemTheme() {
       console.log("resolveSystemTheme")
@@ -425,7 +412,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         return store.active
       },
       all() {
-        return store.themes
+        return allThemes()
       },
       syntax,
       subtleSyntax,
