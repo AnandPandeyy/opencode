@@ -4,24 +4,6 @@ import type { Plugin as ServerPlugin, PluginOptions } from "./index"
 
 export type { CliRenderer, SlotMode } from "@opentui/core"
 
-type HexColor = `#${string}`
-type RefName = string
-type Variant = {
-  dark: HexColor | RefName | number
-  light: HexColor | RefName | number
-}
-type ThemeColorValue = HexColor | RefName | number | Variant
-
-export type ThemeJson = {
-  $schema?: string
-  defs?: Record<string, HexColor | RefName>
-  theme: Record<string, ThemeColorValue> & {
-    selectedListItemText?: ThemeColorValue
-    backgroundMenu?: ThemeColorValue
-    thinkingOpacity?: number
-  }
-}
-
 export type TuiRouteCurrent =
   | {
       name: "home"
@@ -128,6 +110,9 @@ export type TuiToast = {
 export type TuiTheme = {
   readonly current: Record<string, unknown>
   readonly selected: string
+  has: (name: string) => boolean
+  set: (name: string) => boolean
+  install: (jsonPath: string) => Promise<void>
   mode: () => "dark" | "light"
   readonly ready: boolean
 }
@@ -200,5 +185,4 @@ export type TuiPluginModule<Renderer = CliRenderer, Node = unknown> = {
   server?: ServerPlugin
   tui?: TuiPlugin<Renderer, Node>
   slots?: TuiSlotPlugin
-  themes?: Record<string, ThemeJson>
 }

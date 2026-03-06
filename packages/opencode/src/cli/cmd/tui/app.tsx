@@ -395,6 +395,15 @@ function App() {
       get selected() {
         return t.selected
       },
+      has(name) {
+        return t.has(name)
+      },
+      set(name) {
+        return t.set(name)
+      },
+      async install(_jsonPath) {
+        throw new Error("theme.install is only available in plugin context")
+      },
       mode() {
         return t.mode()
       },

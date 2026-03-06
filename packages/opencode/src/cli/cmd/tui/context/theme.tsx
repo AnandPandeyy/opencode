@@ -42,6 +42,7 @@ import { createStore, produce } from "solid-js/store"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
+import { isRecord } from "@/util/record"
 
 type ThemeColors = {
   primary: RGBA
@@ -203,15 +204,25 @@ export function allThemes() {
   return store.themes
 }
 
-export function registerThemes(themes: Record<string, unknown>) {
-  const list = Object.entries(themes).filter((entry): entry is [string, ThemeJson] => {
-    const theme = entry[1]
-    if (!theme || typeof theme !== "object") return false
-    if (!("theme" in theme)) return false
-    return true
+function isTheme(theme: unknown): theme is ThemeJson {
+  if (!isRecord(theme)) return false
+  if (!isRecord(theme.theme)) return false
+  return true
+}
+
+export function hasTheme(name: string) {
+  if (!name) return false
+  return allThemes()[name] !== undefined
+}
+
+export function addTheme(name: string, theme: unknown) {
+  if (!name) return false
+  if (!isTheme(theme)) return false
+  if (hasTheme(name)) return false
+  mergeThemes({
+    [name]: theme,
   })
-  if (!list.length) return
-  mergeThemes(Object.fromEntries(list))
+  return true
 }
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
@@ -414,6 +425,9 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       all() {
         return allThemes()
       },
+      has(name: string) {
+        return hasTheme(name)
+      },
       syntax,
       subtleSyntax,
       mode() {
@@ -424,8 +438,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         kv.set("theme_mode", mode)
       },
       set(theme: string) {
+        if (!hasTheme(theme)) return false
         setStore("active", theme)
         kv.set("theme", theme)
+        return true
       },
       get ready() {
         return store.ready

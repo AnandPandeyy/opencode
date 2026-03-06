@@ -1,5 +1,4 @@
 /** @jsxImportSource @opentui/solid */
-import mytheme from "../themes/mytheme.json" with { type: "json" }
 import { extend, useKeyboard, useTerminalDimensions, type RenderableConstructor } from "@opentui/solid"
 import { RGBA, VignetteEffect, type OptimizedBuffer, type RenderContext } from "@opentui/core"
 import { ThreeRenderable, THREE } from "@opentui/core/3d"
@@ -726,12 +725,11 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
   ])
 }
 
-const themes = {
-  "workspace-plugin-smoke": mytheme,
-}
-
 const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => {
   if (options?.enabled === false) return
+
+  await input.api.theme.install("../themes/mytheme.json")
+  input.api.theme.set("mytheme")
 
   const value = cfg(options)
   const route = names(value)
@@ -770,6 +768,5 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
 }
 
 export default {
-  themes,
   tui,
 }
