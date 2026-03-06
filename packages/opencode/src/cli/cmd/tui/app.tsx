@@ -412,14 +412,19 @@ function App() {
       },
     },
   }
+  const [ready, setReady] = createSignal(false)
   TuiPlugin.init({
     client: sdk.client,
     event: sdk.event,
     renderer,
     api,
-  }).catch((error) => {
-    console.error("Failed to load TUI plugins", error)
   })
+    .catch((error) => {
+      console.error("Failed to load TUI plugins", error)
+    })
+    .finally(() => {
+      setReady(true)
+    })
 
   useKeyboard((evt) => {
     if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
@@ -952,31 +957,35 @@ function App() {
   })
 
   return (
-    <box
-      width={dimensions().width}
-      height={dimensions().height}
-      backgroundColor={theme.background}
-      onMouseDown={(evt) => {
-        if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
-        if (evt.button !== MouseButton.RIGHT) return
+    <Show when={ready()}>
+      <box
+        width={dimensions().width}
+        height={dimensions().height}
+        backgroundColor={theme.background}
+        onMouseDown={(evt) => {
+          if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+          if (evt.button !== MouseButton.RIGHT) return
 
-        if (!Selection.copy(renderer, toast)) return
-        evt.preventDefault()
-        evt.stopPropagation()
-      }}
-      onMouseUp={Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
-    >
-      <Switch>
-        <Match when={route.data.type === "home"}>
-          <Home />
-        </Match>
-        <Match when={route.data.type === "session"}>
-          <Session />
-        </Match>
-      </Switch>
-      {plugin()}
-      <TuiPlugin.Slot name="app" />
-    </box>
+          if (!Selection.copy(renderer, toast)) return
+          evt.preventDefault()
+          evt.stopPropagation()
+        }}
+        onMouseUp={
+          Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)
+        }
+      >
+        <Switch>
+          <Match when={route.data.type === "home"}>
+            <Home />
+          </Match>
+          <Match when={route.data.type === "session"}>
+            <Session />
+          </Match>
+        </Switch>
+        {plugin()}
+        <TuiPlugin.Slot name="app" />
+      </box>
+    </Show>
   )
 }
 
