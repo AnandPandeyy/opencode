@@ -728,8 +728,8 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
 const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => {
   if (options?.enabled === false) return
 
-  await input.api.theme.install("../themes/mytheme.json")
-  input.api.theme.set("mytheme")
+  await input.api.theme.install("./smoke-theme.json")
+  input.api.theme.set("smoke-theme")
 
   const value = cfg(options)
   const route = names(value)

@@ -1,11 +1,11 @@
 import {
   type TuiPlugin as TuiPluginFn,
   type TuiPluginInput,
+  type TuiTheme,
   type TuiSlotContext,
   type TuiSlotMap,
   type TuiSlots,
   type SlotMode,
-  type TuiApi,
 } from "@opencode-ai/plugin/tui"
 import { createSlot, createSolidSlotRegistry, type JSX, type SolidPlugin } from "@opentui/solid"
 import type { CliRenderer } from "@opentui/core"
@@ -66,82 +66,75 @@ function isTheme(value: unknown) {
   return true
 }
 
-function localThemeDir(file: string) {
+function localDir(file: string) {
   const dir = path.dirname(file)
   if (path.basename(dir) === ".opencode") return path.join(dir, "themes")
   return path.join(dir, ".opencode", "themes")
 }
 
-function themeDir(meta?: TuiConfig.PluginMeta) {
-  if (meta?.scope === "local") return localThemeDir(meta.source)
+function scopeDir(meta: TuiConfig.PluginMeta) {
+  if (meta.scope === "local") return localDir(meta.source)
   return path.join(Global.Path.config, "themes")
 }
 
-function pluginDir(spec: string, target: string) {
+function pluginRoot(spec: string, target: string) {
   if (spec.startsWith("file://")) return path.dirname(fileURLToPath(spec))
   if (target.startsWith("file://")) return path.dirname(fileURLToPath(target))
   return target
 }
 
-function themePath(root: string, filepath: string) {
-  if (filepath.startsWith("file://")) return fileURLToPath(filepath)
-  if (path.isAbsolute(filepath)) return filepath
-  return path.resolve(root, filepath)
+function source(root: string, file: string) {
+  if (file.startsWith("file://")) return fileURLToPath(file)
+  if (path.isAbsolute(file)) return file
+  return path.resolve(root, file)
 }
 
-function themeName(filepath: string) {
-  return path.basename(filepath, path.extname(filepath))
+function name(file: string) {
+  return path.basename(file, path.extname(file))
 }
 
-function themeApi(
-  api: TuiApi<JSX.Element>,
-  options: {
-    root: string
-    meta?: TuiConfig.PluginMeta
-  },
-) {
-  return {
-    get current() {
-      return api.theme.current
-    },
-    get selected() {
-      return api.theme.selected
-    },
-    mode() {
-      return api.theme.mode()
-    },
-    get ready() {
-      return api.theme.ready
-    },
-    has(name: string) {
-      return api.theme.has(name)
-    },
-    set(name: string) {
-      return api.theme.set(name)
-    },
-    async install(filepath: string) {
-      const source = themePath(options.root, filepath)
-      const name = themeName(source)
-      if (hasTheme(name)) return
-
-      const text = await Bun.file(source)
-        .text()
-        .catch((error) => {
-          throw new Error(`failed to read theme at ${source}: ${error}`)
-        })
-      const data = JSON.parse(text)
-      if (!isTheme(data)) {
-        throw new Error(`invalid theme at ${source}`)
-      }
-
-      const dest = path.join(themeDir(options.meta), `${name}.json`)
-      if (!(await Filesystem.exists(dest))) {
-        await Filesystem.write(dest, text)
-      }
-
-      addTheme(name, data)
-    },
+function meta(config: TuiConfig.Info, item: Config.PluginSpec) {
+  const key = Config.getPluginName(item)
+  const value = config.plugin_meta?.[key]
+  if (!value) {
+    throw new Error(`missing plugin metadata for ${key}`)
   }
+  return value
+}
+
+function install(meta: TuiConfig.PluginMeta, root: string): TuiTheme["install"] {
+  return async (file) => {
+    const src = source(root, file)
+    const theme = name(src)
+    if (hasTheme(theme)) return
+
+    const text = await Bun.file(src)
+      .text()
+      .catch((error) => {
+        throw new Error(`failed to read theme at ${src}: ${error}`)
+      })
+    const data = JSON.parse(text)
+    if (!isTheme(data)) {
+      throw new Error(`invalid theme at ${src}`)
+    }
+
+    const dest = path.join(scopeDir(meta), `${theme}.json`)
+    if (!(await Filesystem.exists(dest))) {
+      await Filesystem.write(dest, text)
+    }
+
+    addTheme(theme, data)
+  }
+}
+
+function themeApi(theme: TuiTheme, add: TuiTheme["install"]): TuiTheme {
+  return Object.create(theme, {
+    install: {
+      value: add,
+      configurable: true,
+      enumerable: true,
+    },
+  })
 }
 
 export namespace TuiPlugin {
@@ -211,13 +204,16 @@ export namespace TuiPlugin {
 
         const loadOne = async (item: (typeof plugins)[number], retry = false) => {
           const spec = Config.pluginSpecifier(item)
-          const meta = config.plugin_meta?.[Config.getPluginName(item)]
+          const level = meta(config, item)
           log.info("loading tui plugin", { path: spec, retry })
           const target = await resolvePluginTarget(spec).catch((error) => {
             log.error("failed to resolve tui plugin", { path: spec, retry, error })
             return
           })
           if (!target) return false
+
+          const root = pluginRoot(spec, target)
+          const add = install(level, root)
 
           const mod = await import(target).catch((error) => {
             log.error("failed to load tui plugin", { path: spec, retry, error })
@@ -240,7 +236,6 @@ export namespace TuiPlugin {
 
             const tuiPlugin = getTuiPlugin(entry)
             if (!tuiPlugin) continue
-            const root = pluginDir(spec, target)
             await tuiPlugin(
               {
                 ...input,
@@ -249,7 +244,7 @@ export namespace TuiPlugin {
                   route: input.api.route,
                   ui: input.api.ui,
                   keybind: input.api.keybind,
-                  theme: themeApi(input.api, { root, meta }),
+                  theme: themeApi(input.api.theme, add),
                 },
               },
               Config.pluginOptions(item),

@@ -64,48 +64,44 @@ test("loads plugin theme API with scoped theme installation", async () => {
 
       await Bun.write(
         localPluginPath,
-        [
-          "export default async (_input, options) => {",
-          "  if (!options?.fn_marker) return",
-          "  await Bun.write(options.fn_marker, 'called')",
-          "}",
-          "",
-          "export const object_plugin = {",
-          "  tui: async (input, options) => {",
-          "    if (!options?.marker) return",
-          "    const before = input.api.theme.has(options.theme_name)",
-          "    const set_missing = input.api.theme.set(options.theme_name)",
-          "    await input.api.theme.install(options.theme_path)",
-          "    const after = input.api.theme.has(options.theme_name)",
-          "    const set_installed = input.api.theme.set(options.theme_name)",
-          "    const first = await Bun.file(options.dest).text()",
-          "    await Bun.write(options.source, JSON.stringify({ theme: { primary: '#fefefe' } }, null, 2))",
-          "    await input.api.theme.install(options.theme_path)",
-          "    const second = await Bun.file(options.dest).text()",
-          "    await Bun.write(",
-          "      options.marker,",
-          "      JSON.stringify({ before, set_missing, after, set_installed, selected: input.api.theme.selected, same: first === second }),",
-          "    )",
-          "  },",
-          "}",
-          "",
-        ].join("\n"),
+        `export default async (_input, options) => {
+  if (!options?.fn_marker) return
+  await Bun.write(options.fn_marker, "called")
+}
+
+export const object_plugin = {
+  tui: async (input, options) => {
+    if (!options?.marker) return
+    const before = input.api.theme.has(options.theme_name)
+    const set_missing = input.api.theme.set(options.theme_name)
+    await input.api.theme.install(options.theme_path)
+    const after = input.api.theme.has(options.theme_name)
+    const set_installed = input.api.theme.set(options.theme_name)
+    const first = await Bun.file(options.dest).text()
+    await Bun.write(options.source, JSON.stringify({ theme: { primary: "#fefefe" } }, null, 2))
+    await input.api.theme.install(options.theme_path)
+    const second = await Bun.file(options.dest).text()
+    await Bun.write(
+      options.marker,
+      JSON.stringify({ before, set_missing, after, set_installed, selected: input.api.theme.selected, same: first === second }),
+    )
+  },
+}
+`,
       )
 
       await Bun.write(
         globalPluginPath,
-        [
-          "export default {",
-          "  tui: async (input, options) => {",
-          "    if (!options?.marker) return",
-          "    await input.api.theme.install(options.theme_path)",
-          "    const has = input.api.theme.has(options.theme_name)",
-          "    const set_installed = input.api.theme.set(options.theme_name)",
-          "    await Bun.write(options.marker, JSON.stringify({ has, set_installed, selected: input.api.theme.selected }))",
-          "  },",
-          "}",
-          "",
-        ].join("\n"),
+        `export default {
+  tui: async (input, options) => {
+    if (!options?.marker) return
+    await input.api.theme.install(options.theme_path)
+    const has = input.api.theme.has(options.theme_name)
+    const set_installed = input.api.theme.set(options.theme_name)
+    await Bun.write(options.marker, JSON.stringify({ has, set_installed, selected: input.api.theme.selected }))
+  },
+}
+`,
       )
 
       await Bun.write(
