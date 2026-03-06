@@ -16,7 +16,36 @@ export namespace TuiConfig {
 
   export const Info = TuiInfo
 
-  export type Info = z.output<typeof Info>
+  export type PluginMeta = {
+    scope: "global" | "local"
+    source: string
+  }
+
+  type PluginEntry = {
+    item: Config.PluginSpec
+    meta: PluginMeta
+  }
+
+  export type Info = z.output<typeof Info> & {
+    plugin_meta?: Record<string, PluginMeta>
+  }
+
+  function scope(file: string): PluginMeta["scope"] {
+    if (Instance.containsPath(file)) return "local"
+    return "global"
+  }
+
+  function dedupePlugin(list: PluginEntry[]) {
+    const seen = new Set<string>()
+    const result: PluginEntry[] = []
+    for (const item of list.toReversed()) {
+      const name = Config.getPluginName(item.item)
+      if (seen.has(name)) continue
+      seen.add(name)
+      result.push(item)
+    }
+    return result.toReversed()
+  }
 
   function mergeInfo(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
@@ -44,35 +73,56 @@ export namespace TuiConfig {
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
 
     let result: Info = {}
+    const plugin: PluginEntry[] = []
+
+    const apply = async (file: string) => {
+      const data = await loadFile(file)
+      result = mergeInfo(result, data)
+      if (!data.plugin?.length) return
+      const level = scope(file)
+      for (const item of data.plugin) {
+        plugin.push({
+          item,
+          meta: {
+            scope: level,
+            source: file,
+          },
+        })
+      }
+    }
 
     for (const file of ConfigPaths.fileInDirectory(Global.Path.config, "tui")) {
-      result = mergeInfo(result, await loadFile(file))
+      await apply(file)
     }
 
     if (custom) {
-      result = mergeInfo(result, await loadFile(custom))
+      await apply(custom)
       log.debug("loaded custom tui config", { path: custom })
     }
 
     for (const file of projectFiles) {
-      result = mergeInfo(result, await loadFile(file))
+      await apply(file)
     }
 
     for (const dir of unique(directories)) {
       if (!dir.endsWith(".opencode") && dir !== Flag.OPENCODE_CONFIG_DIR) continue
       for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
-        result = mergeInfo(result, await loadFile(file))
+        await apply(file)
       }
     }
 
     if (existsSync(managed)) {
       for (const file of ConfigPaths.fileInDirectory(managed, "tui")) {
-        result = mergeInfo(result, await loadFile(file))
+        await apply(file)
       }
     }
 
+    const merged = dedupePlugin(plugin)
     result.keybinds = Config.Keybinds.parse(result.keybinds ?? {})
-    result.plugin = Config.deduplicatePlugins(result.plugin ?? [])
+    result.plugin = merged.map((item) => item.item)
+    result.plugin_meta = merged.length
+      ? Object.fromEntries(merged.map((item) => [Config.getPluginName(item.item), item.meta]))
+      : undefined
 
     const deps: Promise<void>[] = []
     for (const dir of unique(directories)) {
