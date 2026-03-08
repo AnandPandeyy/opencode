@@ -1,4 +1,4 @@
-import { render, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
+import { render, TimeToFirstDraw, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { createCliRenderer, MouseButton, TextAttributes, type CliRendererConfig, type ParsedKey } from "@opentui/core"
@@ -974,6 +974,9 @@ function App() {
           Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)
         }
       >
+        <Show when={Flag.OPENCODE_SHOW_TTFD}>
+          <TimeToFirstDraw />
+        </Show>
         <Switch>
           <Match when={route.data.type === "home"}>
             <Home />
