@@ -125,15 +125,17 @@ export namespace TuiConfig {
       : undefined
 
     const deps: Promise<void>[] = []
-    for (const dir of unique(directories)) {
-      if (!dir.endsWith(".opencode") && dir !== Flag.OPENCODE_CONFIG_DIR) continue
-      deps.push(
-        (async () => {
-          const shouldInstall = await Config.needsInstall(dir)
-          if (!shouldInstall) return
-          await Config.installDependencies(dir)
-        })(),
-      )
+    if (result.plugin?.length) {
+      for (const dir of unique(directories)) {
+        if (!dir.endsWith(".opencode") && dir !== Flag.OPENCODE_CONFIG_DIR) continue
+        deps.push(
+          (async () => {
+            const shouldInstall = await Config.needsInstall(dir)
+            if (!shouldInstall) return
+            await Config.installDependencies(dir)
+          })(),
+        )
+      }
     }
 
     return {
