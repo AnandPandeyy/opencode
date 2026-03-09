@@ -2,7 +2,7 @@
 import { extend, useKeyboard, useTerminalDimensions, type RenderableConstructor } from "@opentui/solid"
 import { RGBA, VignetteEffect, type OptimizedBuffer, type RenderContext } from "@opentui/core"
 import { ThreeRenderable, THREE } from "@opentui/core/3d"
-import type { TuiApi, TuiPluginInput } from "@opencode-ai/plugin/tui"
+import type { TuiApi, TuiKeybindSet, TuiPluginInput } from "@opencode-ai/plugin/tui"
 
 const tabs = ["overview", "counter", "help"]
 const bind = {
@@ -58,7 +58,7 @@ const names = (input: ReturnType<typeof cfg>) => {
   }
 }
 
-type Keys = ReturnType<TuiApi["keybind"]["create"]>
+type Keys = TuiKeybindSet
 const ui = {
   panel: "#1d1d1d",
   border: "#4a4a4a",
