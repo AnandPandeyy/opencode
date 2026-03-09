@@ -301,8 +301,14 @@ const entry = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<t
     <DialogPrompt
       title="Smoke prompt"
       value={value.note}
-      onConfirm={(note) => api.route.navigate(route.screen, { ...value, note, source: "prompt" })}
-      onCancel={() => api.route.navigate(route.screen, value)}
+      onConfirm={(note) => {
+        api.ui.dialog.clear()
+        api.route.navigate(route.screen, { ...value, note, source: "prompt" })
+      }}
+      onCancel={() => {
+        api.ui.dialog.clear()
+        api.route.navigate(route.screen, value)
+      }}
     />
   ))
 }
@@ -315,14 +321,15 @@ const picker = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<
       title="Smoke select"
       options={opts}
       current={value.tab}
-      onSelect={(item) =>
+      onSelect={(item) => {
+        api.ui.dialog.clear()
         api.route.navigate(route.screen, {
           ...value,
           tab: typeof item.value === "number" ? item.value : value.tab,
           selected: item.title,
           source: "select",
         })
-      }
+      }}
     />
   ))
 }
