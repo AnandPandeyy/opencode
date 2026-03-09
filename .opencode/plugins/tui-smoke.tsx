@@ -5,6 +5,22 @@ import { ThreeRenderable, THREE } from "@opentui/core/3d"
 import type { TuiApi, TuiPluginInput } from "@opencode-ai/plugin/tui"
 
 const tabs = ["overview", "counter", "help"]
+const bind = {
+  modal: "ctrl+shift+m",
+  screen: "ctrl+shift+o",
+  home: "escape,ctrl+h",
+  left: "left,h",
+  right: "right,l",
+  up: "up,k",
+  down: "down,j",
+  alert: "a",
+  confirm: "c",
+  prompt: "p",
+  select: "s",
+  modal_accept: "enter,return",
+  modal_close: "escape",
+  dialog_close: "escape",
+}
 
 const pick = (value: unknown, fallback: string) => {
   if (typeof value !== "string") return fallback
@@ -17,13 +33,17 @@ const num = (value: unknown, fallback: number) => {
   return value
 }
 
+const rec = (value: unknown) => {
+  if (!value || typeof value !== "object") return
+  return value as Record<string, unknown>
+}
+
 const cfg = (options: Record<string, unknown> | undefined) => {
   return {
     label: pick(options?.label, "smoke"),
-    modal: pick(options?.modal, "ctrl+shift+m"),
-    screen: pick(options?.screen, "ctrl+shift+o"),
     route: pick(options?.route, "workspace-smoke"),
     vignette: Math.max(0, num(options?.vignette, 0.35)),
+    keybinds: rec(options?.keybinds),
   }
 }
 
@@ -38,6 +58,7 @@ const names = (input: ReturnType<typeof cfg>) => {
   }
 }
 
+type Keys = ReturnType<TuiApi["keybind"]["create"]>
 const ui = {
   panel: "#1d1d1d",
   border: "#4a4a4a",
@@ -214,6 +235,7 @@ const Screen = (props: {
   api: TuiApi
   input: ReturnType<typeof cfg>
   route: ReturnType<typeof names>
+  keys: Keys
   params?: Record<string, unknown>
 }) => {
   const dim = useTerminalDimensions()
@@ -225,70 +247,70 @@ const Screen = (props: {
 
     const next = current(props.api, props.route)
 
-    if (evt.name === "escape" || (evt.ctrl && evt.name === "h")) {
+    if (props.keys.match("home", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate("home")
       return
     }
 
-    if (evt.name === "left" || evt.name === "h") {
+    if (props.keys.match("left", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.screen, { ...next, tab: (next.tab - 1 + tabs.length) % tabs.length })
       return
     }
 
-    if (evt.name === "right" || evt.name === "l") {
+    if (props.keys.match("right", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.screen, { ...next, tab: (next.tab + 1) % tabs.length })
       return
     }
 
-    if (evt.name === "up" || evt.name === "k") {
+    if (props.keys.match("up", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.screen, { ...next, count: next.count + 1 })
       return
     }
 
-    if (evt.name === "down" || evt.name === "j") {
+    if (props.keys.match("down", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.screen, { ...next, count: next.count - 1 })
       return
     }
 
-    if (evt.ctrl && evt.name === "m") {
+    if (props.keys.match("modal", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.modal, next)
       return
     }
 
-    if (evt.name === "a") {
+    if (props.keys.match("alert", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.alert, next)
       return
     }
 
-    if (evt.name === "c") {
+    if (props.keys.match("confirm", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.confirm, next)
       return
     }
 
-    if (evt.name === "p") {
+    if (props.keys.match("prompt", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.prompt, next)
       return
     }
 
-    if (evt.name === "s") {
+    if (props.keys.match("select", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.select, next)
@@ -311,7 +333,7 @@ const Screen = (props: {
             <b>{props.input.label} screen</b>
             <span style={{ fg: skin.muted }}> plugin route</span>
           </text>
-          <text fg={skin.muted}>esc or ctrl+h home</text>
+          <text fg={skin.muted}>{props.keys.print("home")} home</text>
         </box>
 
         <box flexDirection="row" gap={1} paddingBottom={1}>
@@ -349,14 +371,19 @@ const Screen = (props: {
           {value.tab === 1 ? (
             <box flexDirection="column" gap={1}>
               <text fg={skin.text}>Counter: {value.count}</text>
-              <text fg={skin.muted}>up/down or j/k change value</text>
+              <text fg={skin.muted}>
+                {props.keys.print("up")} / {props.keys.print("down")} change value
+              </text>
             </box>
           ) : null}
 
           {value.tab === 2 ? (
             <box flexDirection="column" gap={1}>
-              <text fg={skin.muted}>ctrl+m modal | a alert | c confirm | p prompt | s select</text>
-              <text fg={skin.muted}>esc or ctrl+h returns home</text>
+              <text fg={skin.muted}>
+                {props.keys.print("modal")} modal | {props.keys.print("alert")} alert | {props.keys.print("confirm")}{" "}
+                confirm | {props.keys.print("prompt")} prompt | {props.keys.print("select")} select
+              </text>
+              <text fg={skin.muted}>{props.keys.print("home")} returns home</text>
             </box>
           ) : null}
         </box>
@@ -378,6 +405,7 @@ const Modal = (props: {
   api: TuiApi
   input: ReturnType<typeof cfg>
   route: ReturnType<typeof names>
+  keys: Keys
   params?: Record<string, unknown>
 }) => {
   const Dialog = props.api.ui.Dialog
@@ -387,14 +415,14 @@ const Modal = (props: {
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.modal) return
 
-    if (evt.name === "return" || evt.name === "enter") {
+    if (props.keys.match("modal_accept", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.screen, { ...value, source: "modal" })
       return
     }
 
-    if (evt.name === "escape") {
+    if (props.keys.match("modal_close", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate("home")
@@ -408,9 +436,11 @@ const Modal = (props: {
           <text fg={skin.text}>
             <b>{props.input.label} modal</b>
           </text>
-          <text fg={skin.muted}>{props.api.keybind.print(props.input.modal)} modal command</text>
-          <text fg={skin.muted}>{props.api.keybind.print(props.input.screen)} screen command</text>
-          <text fg={skin.muted}>enter opens screen · esc closes</text>
+          <text fg={skin.muted}>{props.keys.print("modal")} modal command</text>
+          <text fg={skin.muted}>{props.keys.print("screen")} screen command</text>
+          <text fg={skin.muted}>
+            {props.keys.print("modal_accept")} opens screen · {props.keys.print("modal_close")} closes
+          </text>
           <box flexDirection="row" gap={1}>
             <Btn
               txt="open screen"
@@ -426,7 +456,12 @@ const Modal = (props: {
   )
 }
 
-const AlertDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; params?: Record<string, unknown> }) => {
+const AlertDialog = (props: {
+  api: TuiApi
+  route: ReturnType<typeof names>
+  keys: Keys
+  params?: Record<string, unknown>
+}) => {
   const Dialog = props.api.ui.Dialog
   const DialogAlert = props.api.ui.DialogAlert
   const value = parse(props.params)
@@ -434,7 +469,7 @@ const AlertDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; para
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.alert) return
-    if (evt.name !== "escape") return
+    if (!props.keys.match("dialog_close", evt)) return
     evt.preventDefault()
     evt.stopPropagation()
     props.api.route.navigate(props.route.screen, value)
@@ -453,7 +488,12 @@ const AlertDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; para
   )
 }
 
-const ConfirmDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; params?: Record<string, unknown> }) => {
+const ConfirmDialog = (props: {
+  api: TuiApi
+  route: ReturnType<typeof names>
+  keys: Keys
+  params?: Record<string, unknown>
+}) => {
   const Dialog = props.api.ui.Dialog
   const DialogConfirm = props.api.ui.DialogConfirm
   const value = parse(props.params)
@@ -461,7 +501,7 @@ const ConfirmDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; pa
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.confirm) return
-    if (evt.name !== "escape") return
+    if (!props.keys.match("dialog_close", evt)) return
     evt.preventDefault()
     evt.stopPropagation()
     props.api.route.navigate(props.route.screen, value)
@@ -483,7 +523,12 @@ const ConfirmDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; pa
   )
 }
 
-const PromptDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; params?: Record<string, unknown> }) => {
+const PromptDialog = (props: {
+  api: TuiApi
+  route: ReturnType<typeof names>
+  keys: Keys
+  params?: Record<string, unknown>
+}) => {
   const Dialog = props.api.ui.Dialog
   const DialogPrompt = props.api.ui.DialogPrompt
   const value = parse(props.params)
@@ -491,7 +536,7 @@ const PromptDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.prompt) return
-    if (evt.name !== "escape") return
+    if (!props.keys.match("dialog_close", evt)) return
     evt.preventDefault()
     evt.stopPropagation()
     props.api.route.navigate(props.route.screen, value)
@@ -512,7 +557,12 @@ const PromptDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
   )
 }
 
-const SelectDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; params?: Record<string, unknown> }) => {
+const SelectDialog = (props: {
+  api: TuiApi
+  route: ReturnType<typeof names>
+  keys: Keys
+  params?: Record<string, unknown>
+}) => {
   const Dialog = props.api.ui.Dialog
   const DialogSelect = props.api.ui.DialogSelect
   const value = parse(props.params)
@@ -537,7 +587,7 @@ const SelectDialog = (props: { api: TuiApi; route: ReturnType<typeof names>; par
 
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.select) return
-    if (evt.name !== "escape") return
+    if (!props.keys.match("dialog_close", evt)) return
     evt.preventDefault()
     evt.stopPropagation()
     props.api.route.navigate(props.route.screen, value)
@@ -629,13 +679,13 @@ const slot = (input: ReturnType<typeof cfg>) => ({
   },
 })
 
-const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
+const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
   const route = names(input)
   api.command.register(() => [
     {
       title: `${input.label} modal`,
       value: "plugin.smoke.modal",
-      keybind: input.modal,
+      keybind: keys.get("modal"),
       category: "Plugin",
       slash: {
         name: "smoke",
@@ -647,7 +697,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>) => {
     {
       title: `${input.label} screen`,
       value: "plugin.smoke.screen",
-      keybind: input.screen,
+      keybind: keys.get("screen"),
       category: "Plugin",
       slash: {
         name: "smoke-screen",
@@ -733,37 +783,38 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
 
   const value = cfg(options)
   const route = names(value)
+  const keys = input.api.keybind.create(bind, value.keybinds)
   const fx = new VignetteEffect(value.vignette)
   input.renderer.addPostProcessFn(fx.apply.bind(fx))
 
   input.api.route.register([
     {
       name: route.screen,
-      render: ({ params }) => <Screen api={input.api} input={value} route={route} params={params} />,
+      render: ({ params }) => <Screen api={input.api} input={value} route={route} keys={keys} params={params} />,
     },
     {
       name: route.modal,
-      render: ({ params }) => <Modal api={input.api} input={value} route={route} params={params} />,
+      render: ({ params }) => <Modal api={input.api} input={value} route={route} keys={keys} params={params} />,
     },
     {
       name: route.alert,
-      render: ({ params }) => <AlertDialog api={input.api} route={route} params={params} />,
+      render: ({ params }) => <AlertDialog api={input.api} route={route} keys={keys} params={params} />,
     },
     {
       name: route.confirm,
-      render: ({ params }) => <ConfirmDialog api={input.api} route={route} params={params} />,
+      render: ({ params }) => <ConfirmDialog api={input.api} route={route} keys={keys} params={params} />,
     },
     {
       name: route.prompt,
-      render: ({ params }) => <PromptDialog api={input.api} route={route} params={params} />,
+      render: ({ params }) => <PromptDialog api={input.api} route={route} keys={keys} params={params} />,
     },
     {
       name: route.select,
-      render: ({ params }) => <SelectDialog api={input.api} route={route} params={params} />,
+      render: ({ params }) => <SelectDialog api={input.api} route={route} keys={keys} params={params} />,
     },
   ])
 
-  reg(input.api, value)
+  reg(input.api, value, keys)
   input.slots.register(slot(value))
 }
 

@@ -7,6 +7,7 @@ import type { CliRenderer } from "@opentui/core"
 import { tmpdir } from "../../fixture/fixture"
 import { Log } from "../../../src/util/log"
 import { Global } from "../../../src/global"
+import { createPluginKeybind } from "../../../src/cli/cmd/tui/context/keybind-plugin"
 
 mock.module("@opentui/solid/preload", () => ({}))
 mock.module("@opentui/solid/jsx-runtime", () => ({
@@ -35,7 +36,7 @@ async function waitForLog(text: string, timeout = 1000) {
     .catch(() => "")
 }
 
-test("loads plugin theme API with scoped theme installation", async () => {
+test("loads plugin theme and keybind APIs with scoped theme installation", async () => {
   const stamp = Date.now()
   const globalConfigPath = path.join(Global.Path.config, "tui.json")
   const backup = await Bun.file(globalConfigPath)
@@ -80,6 +81,10 @@ test("loads plugin theme API with scoped theme installation", async () => {
 export const object_plugin = {
   tui: async (input, options) => {
     if (!options?.marker) return
+    const key = input.api.keybind.create(
+      { modal: "ctrl+shift+m", screen: "ctrl+shift+o", close: "escape" },
+      options.keybinds,
+    )
     const before = input.api.theme.has(options.theme_name)
     const set_missing = input.api.theme.set(options.theme_name)
     await input.api.theme.install(options.theme_path)
@@ -91,7 +96,18 @@ export const object_plugin = {
     const second = await Bun.file(options.dest).text()
     await Bun.write(
       options.marker,
-      JSON.stringify({ before, set_missing, after, set_installed, selected: input.api.theme.selected, same: first === second }),
+      JSON.stringify({
+        before,
+        set_missing,
+        after,
+        set_installed,
+        selected: input.api.theme.selected,
+        same: first === second,
+        key_modal: key.get("modal"),
+        key_close: key.get("close"),
+        key_unknown: key.get("ctrl+k"),
+        key_print: key.print("modal"),
+      }),
     )
   },
 }
@@ -157,6 +173,10 @@ export const object_plugin = {
                   dest: localDest,
                   theme_path: `./${localThemeFile}`,
                   theme_name: localThemeName,
+                  keybinds: {
+                    modal: "ctrl+alt+m",
+                    close: "q",
+                  },
                 },
               ],
               [
@@ -202,6 +222,18 @@ export const object_plugin = {
       return this
     },
   } satisfies CliRenderer
+  const keybind = {
+    parse: (evt: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; super?: boolean }) => ({
+      name: evt.name ?? "",
+      ctrl: evt.ctrl ?? false,
+      meta: evt.meta ?? false,
+      shift: evt.shift ?? false,
+      super: evt.super,
+      leader: false,
+    }),
+    match: () => false,
+    print: (key: string) => `print:${key}`,
+  }
 
   try {
     expect(addTheme(tmp.extra.preloadedThemeName, { theme: { primary: "#303030" } })).toBe(true)
@@ -235,15 +267,10 @@ export const object_plugin = {
           toast: () => {},
         },
         keybind: {
-          parse: () => ({
-            name: "",
-            ctrl: false,
-            meta: false,
-            shift: false,
-            leader: false,
-          }),
-          match: () => false,
-          print: () => "",
+          ...keybind,
+          create(defaults, overrides) {
+            return createPluginKeybind(keybind, defaults, overrides)
+          },
         },
         theme: {
           get current() {
@@ -280,6 +307,10 @@ export const object_plugin = {
     expect(local.set_installed).toBe(true)
     expect(local.selected).toBe(tmp.extra.localThemeName)
     expect(local.same).toBe(true)
+    expect(local.key_modal).toBe("ctrl+alt+m")
+    expect(local.key_close).toBe("q")
+    expect(local.key_unknown).toBe("ctrl+k")
+    expect(local.key_print).toBe("print:ctrl+alt+m")
 
     const global = JSON.parse(await fs.readFile(tmp.extra.globalMarker, "utf8"))
     expect(global.has).toBe(true)

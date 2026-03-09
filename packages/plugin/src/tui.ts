@@ -50,6 +50,16 @@ export type TuiKeybind = {
   leader: boolean
 }
 
+export type TuiKeybindMap = Record<string, string>
+
+export type TuiKeybindSet = {
+  readonly all: TuiKeybindMap
+  get: (name: string) => string
+  parse: (evt: ParsedKey) => TuiKeybind
+  match: (name: string, evt: ParsedKey) => boolean
+  print: (name: string) => string
+}
+
 export type TuiDialogProps<Node = unknown> = {
   size?: "medium" | "large"
   onClose: () => void
@@ -139,6 +149,7 @@ export type TuiApi<Node = unknown> = {
     parse: (evt: ParsedKey) => TuiKeybind
     match: (key: string, evt: ParsedKey) => boolean
     print: (key: string) => string
+    create: (defaults: TuiKeybindMap, overrides?: Record<string, unknown>) => TuiKeybindSet
   }
   theme: TuiTheme
 }

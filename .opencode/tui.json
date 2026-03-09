@@ -6,7 +6,13 @@
       "./plugins/tui-smoke.tsx",
       {
         "enabled": true,
-        "label": "workspace"
+        "label": "workspace",
+        "keybinds": {
+          "modal": "ctrl+alt+m",
+          "screen": "ctrl+alt+o",
+          "home": "escape,ctrl+shift+h",
+          "dialog_close": "escape,q"
+        }
       }
     ]
   ]

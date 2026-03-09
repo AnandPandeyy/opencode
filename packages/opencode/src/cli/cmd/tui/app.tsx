@@ -387,6 +387,9 @@ function App() {
       print(key) {
         return keybind.print(key)
       },
+      create(defaults, overrides) {
+        return keybind.create(defaults, overrides)
+      },
     },
     theme: {
       get current() {
