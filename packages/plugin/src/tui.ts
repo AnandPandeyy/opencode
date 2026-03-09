@@ -189,6 +189,30 @@ export type TuiEventBus = {
   ) => () => void
 }
 
+export type TuiPluginState = "new" | "changed" | "same"
+
+export type TuiPluginMeta = {
+  name: string
+  source: "file" | "npm"
+  spec: string
+  target: string
+  requested?: string
+  version?: string
+  modified?: number
+  first_time: number
+  last_time: number
+  time_changed: number
+  load_count: number
+  fingerprint: string
+}
+
+export type TuiPluginInit = {
+  state: TuiPluginState
+  first: boolean
+  updated: boolean
+  entry: TuiPluginMeta
+}
+
 export type TuiPluginInput<Renderer = CliRenderer, Node = unknown> = {
   client: ReturnType<typeof createOpencodeClientV2>
   event: TuiEventBus
@@ -200,6 +224,7 @@ export type TuiPluginInput<Renderer = CliRenderer, Node = unknown> = {
 export type TuiPlugin<Renderer = CliRenderer, Node = unknown> = (
   input: TuiPluginInput<Renderer, Node>,
   options?: PluginOptions,
+  init?: TuiPluginInit,
 ) => Promise<void>
 
 export type TuiPluginModule<Renderer = CliRenderer, Node = unknown> = {
