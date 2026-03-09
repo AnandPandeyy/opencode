@@ -209,9 +209,11 @@ export const object_plugin = {
         localMarker,
         globalMarker,
         preloadedMarker,
+        localPluginPath,
       }
     },
   })
+  process.env.OPENCODE_PLUGIN_META_FILE = path.join(tmp.path, "plugin-meta.json")
 
   const cwd = spyOn(process, "cwd").mockImplementation(() => tmp.path)
   let selected = "opencode"
@@ -353,6 +355,16 @@ export const object_plugin = {
     expect(log).toContain("ignoring non-object tui plugin export")
     expect(log).toContain("name=default")
     expect(log).toContain("type=function")
+
+    const meta = JSON.parse(await fs.readFile(path.join(tmp.path, "plugin-meta.json"), "utf8")) as Record<
+      string,
+      { spec: string; source: string; load_count: number }
+    >
+    const localSpec = pathToFileURL(tmp.extra.localPluginPath).href
+    const localRow = Object.values(meta).find((item) => item.spec === localSpec)
+    expect(localRow).toBeDefined()
+    expect(localRow?.source).toBe("file")
+    expect((localRow?.load_count ?? 0) > 0).toBe(true)
   } finally {
     cwd.mockRestore()
     if (backup === undefined) {
@@ -361,5 +373,6 @@ export const object_plugin = {
       await Bun.write(globalConfigPath, backup)
     }
     await fs.rm(tmp.extra.globalDest, { force: true }).catch(() => {})
+    delete process.env.OPENCODE_PLUGIN_META_FILE
   }
 })

@@ -19,6 +19,7 @@ import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
 import { Instance } from "@/project/instance"
 import { resolvePluginTarget, uniqueModuleEntries } from "@/plugin/shared"
+import { PluginMeta } from "@/plugin/meta"
 import { addTheme, hasTheme } from "./context/theme"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
@@ -200,6 +201,19 @@ export namespace TuiPlugin {
             return
           })
           if (!target) return false
+          const meta = await PluginMeta.touch(spec, target).catch((error) => {
+            log.warn("failed to track tui plugin", { path: spec, retry, error })
+          })
+          if (meta && meta.state !== "same") {
+            log.info("tui plugin metadata updated", {
+              path: spec,
+              retry,
+              state: meta.state,
+              source: meta.entry.source,
+              version: meta.entry.version,
+              modified: meta.entry.modified,
+            })
+          }
 
           const root = pluginRoot(spec, target)
           const install = makeInstallFn(getPluginMeta(config, item), root)
@@ -249,15 +263,21 @@ export namespace TuiPlugin {
           return true
         }
 
-        for (const item of plugins) {
-          const ok = await loadOne(item)
-          if (ok) continue
+        try {
+          for (const item of plugins) {
+            const ok = await loadOne(item)
+            if (ok) continue
 
-          const spec = Config.pluginSpecifier(item)
-          if (!spec.startsWith("file://")) continue
+            const spec = Config.pluginSpecifier(item)
+            if (!spec.startsWith("file://")) continue
 
-          await wait()
-          await loadOne(item, true)
+            await wait()
+            await loadOne(item, true)
+          }
+        } finally {
+          await PluginMeta.persist().catch((error) => {
+            log.warn("failed to persist tui plugin metadata", { error })
+          })
         }
       },
     }).catch((error) => {
