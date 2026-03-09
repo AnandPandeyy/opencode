@@ -87,13 +87,13 @@ export namespace Plugin {
       return value.server
     }
 
-    for (const item of plugins) {
+    const prep = async (item: (typeof plugins)[number]) => {
       const spec = Config.pluginSpecifier(item)
       // ignore old codex plugin since it is supported first party now
-      if (spec.includes("opencode-openai-codex-auth") || spec.includes("opencode-copilot-auth")) continue
+      if (spec.includes("opencode-openai-codex-auth") || spec.includes("opencode-copilot-auth")) return
       log.info("loading plugin", { path: spec })
       const target = await resolvePlugin(spec)
-      if (!target) continue
+      if (!target) return
       const mod = await import(target).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         log.error("failed to load plugin", { path: spec, error: message })
@@ -104,23 +104,35 @@ export namespace Plugin {
         })
         return
       })
-      if (!mod) continue
+      if (!mod) return
+      return {
+        item,
+        spec,
+        mod,
+      }
+    }
 
+    const loaded = await Promise.all(plugins.map((item) => prep(item)))
+    for (const load of loaded) {
+      if (!load) continue
+
+      // Keep plugin execution sequential so hook registration and execution
+      // order remains deterministic across plugin runs.
       // Prevent duplicate initialization when plugins export the same function
       // as both a named export and default export (e.g., `export const X` and `export default X`).
       // uniqueModuleEntries keeps only the first export for each shared value reference.
       await (async () => {
-        for (const [, entry] of uniqueModuleEntries(mod)) {
+        for (const [, entry] of uniqueModuleEntries(load.mod)) {
           const server = getServerPlugin(entry)
           if (!server) throw new TypeError("Plugin export is not a function")
-          hooks.push(await server(input, Config.pluginOptions(item)))
+          hooks.push(await server(input, Config.pluginOptions(load.item)))
         }
       })().catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
-        log.error("failed to load plugin", { path: spec, error: message })
+        log.error("failed to load plugin", { path: load.spec, error: message })
         Bus.publish(Session.Event.Error, {
           error: new NamedError.Unknown({
-            message: `Failed to load plugin ${spec}: ${message}`,
+            message: `Failed to load plugin ${load.spec}: ${message}`,
           }).toObject(),
         })
       })
