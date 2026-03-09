@@ -3,7 +3,6 @@ import { extend, useKeyboard, useTerminalDimensions, type RenderableConstructor 
 import { RGBA, VignetteEffect, type OptimizedBuffer, type RenderContext } from "@opentui/core"
 import { ThreeRenderable, THREE } from "@opentui/core/3d"
 import type { TuiApi, TuiKeybindSet, TuiPluginInput } from "@opencode-ai/plugin/tui"
-import { createEffect } from "solid-js"
 
 const tabs = ["overview", "counter", "help"]
 const bind = {
@@ -25,10 +24,6 @@ const bind = {
   local_push: "enter,return",
   local_close: "q,backspace",
   host: "z",
-}
-
-const dbg = (...value: unknown[]) => {
-  console.log("[smoke-debug]", ...value)
 }
 
 const pick = (value: unknown, fallback: string) => {
@@ -60,10 +55,6 @@ const names = (input: ReturnType<typeof cfg>) => {
   return {
     modal: `${input.route}.modal`,
     screen: `${input.route}.screen`,
-    alert: `${input.route}.alert`,
-    confirm: `${input.route}.confirm`,
-    prompt: `${input.route}.prompt`,
-    select: `${input.route}.select`,
   }
 }
 
@@ -208,7 +199,6 @@ const Btn = (props: { txt: string; run: () => void; skin: Skin; on?: boolean }) 
   return (
     <box
       onMouseUp={() => {
-        dbg("button", props.txt)
         props.run()
       }}
       backgroundColor={props.on ? props.skin.accent : props.skin.border}
@@ -245,6 +235,98 @@ const current = (api: TuiApi, route: ReturnType<typeof names>) => {
   return parse(value.params)
 }
 
+const opts = [
+  {
+    title: "Overview",
+    value: 0,
+    description: "Switch to overview tab",
+  },
+  {
+    title: "Counter",
+    value: 1,
+    description: "Switch to counter tab",
+  },
+  {
+    title: "Help",
+    value: 2,
+    description: "Switch to help tab",
+  },
+]
+
+const host = (api: TuiApi, input: ReturnType<typeof cfg>, skin: Skin) => {
+  api.ui.dialog.setSize("medium")
+  api.ui.dialog.replace(() => (
+    <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
+      <text fg={skin.text}>
+        <b>{input.label} host overlay</b>
+      </text>
+      <text fg={skin.muted}>Using api.ui.dialog stack with built-in backdrop</text>
+      <text fg={skin.muted}>esc closes · depth {api.ui.dialog.depth}</text>
+      <box flexDirection="row" gap={1}>
+        <Btn txt="close" run={() => api.ui.dialog.clear()} skin={skin} on />
+      </box>
+    </box>
+  ))
+}
+
+const warn = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+  const DialogAlert = api.ui.DialogAlert
+  api.ui.dialog.setSize("medium")
+  api.ui.dialog.replace(() => (
+    <DialogAlert
+      title="Smoke alert"
+      message="Testing built-in alert dialog"
+      onConfirm={() => api.route.navigate(route.screen, { ...value, source: "alert" })}
+    />
+  ))
+}
+
+const check = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+  const DialogConfirm = api.ui.DialogConfirm
+  api.ui.dialog.setSize("medium")
+  api.ui.dialog.replace(() => (
+    <DialogConfirm
+      title="Smoke confirm"
+      message="Apply +1 to counter?"
+      onConfirm={() => api.route.navigate(route.screen, { ...value, count: value.count + 1, source: "confirm" })}
+      onCancel={() => api.route.navigate(route.screen, { ...value, source: "confirm-cancel" })}
+    />
+  ))
+}
+
+const entry = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+  const DialogPrompt = api.ui.DialogPrompt
+  api.ui.dialog.setSize("medium")
+  api.ui.dialog.replace(() => (
+    <DialogPrompt
+      title="Smoke prompt"
+      value={value.note}
+      onConfirm={(note) => api.route.navigate(route.screen, { ...value, note, source: "prompt" })}
+      onCancel={() => api.route.navigate(route.screen, value)}
+    />
+  ))
+}
+
+const picker = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+  const DialogSelect = api.ui.DialogSelect
+  api.ui.dialog.setSize("medium")
+  api.ui.dialog.replace(() => (
+    <DialogSelect
+      title="Smoke select"
+      options={opts}
+      current={value.tab}
+      onSelect={(item) =>
+        api.route.navigate(route.screen, {
+          ...value,
+          tab: typeof item.value === "number" ? item.value : value.tab,
+          selected: item.title,
+          source: "select",
+        })
+      }
+    />
+  ))
+}
+
 const Screen = (props: {
   api: TuiApi
   input: ReturnType<typeof cfg>
@@ -261,91 +343,33 @@ const Screen = (props: {
   }
   const push = (base?: ReturnType<typeof parse>) => {
     const next = base ?? current(props.api, props.route)
-    dbg("local.push", { next: next.local + 1 })
     set(next.local + 1, next)
   }
   const open = () => {
     const next = current(props.api, props.route)
-    if (next.local > 0) {
-      dbg("local.open.skip", { next: next.local })
-      return
-    }
-    dbg("local.open", { next: 1 })
+    if (next.local > 0) return
     set(1, next)
   }
   const pop = (base?: ReturnType<typeof parse>) => {
     const next = base ?? current(props.api, props.route)
     const local = Math.max(0, next.local - 1)
-    dbg("local.pop", { next: local })
     set(local, next)
   }
   const show = () => {
-    dbg("local.show.click")
     setTimeout(() => {
-      dbg("local.show.timeout")
       open()
     }, 0)
   }
-  const host = () => {
-    dbg("host.show", {
-      open: props.api.ui.dialog.open,
-      depth: props.api.ui.dialog.depth,
-    })
-    props.api.ui.dialog.setSize("medium")
-    props.api.ui.dialog.replace(() => (
-      <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
-        <text fg={skin.text}>
-          <b>{props.input.label} host overlay</b>
-        </text>
-        <text fg={skin.muted}>Using api.ui.dialog stack with built-in backdrop</text>
-        <text fg={skin.muted}>esc closes · depth {props.api.ui.dialog.depth}</text>
-        <box flexDirection="row" gap={1}>
-          <Btn txt="close" run={() => props.api.ui.dialog.clear()} skin={skin} on />
-        </box>
-      </box>
-    ))
-    dbg("host.show.done", {
-      open: props.api.ui.dialog.open,
-      depth: props.api.ui.dialog.depth,
-    })
-  }
-
-  createEffect(() => {
-    dbg("screen.state", {
-      local: value.local,
-      host_open: props.api.ui.dialog.open,
-      host_depth: props.api.ui.dialog.depth,
-      route: props.api.route.current.name,
-      width: dim().width,
-      height: dim().height,
-    })
-  })
-  createEffect(() => {
-    if (value.local === 0) return
-    dbg("local.overlay.visible", { local: value.local })
-  })
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.screen) return
-    dbg("key", {
-      name: evt.name,
-      ctrl: !!evt.ctrl,
-      shift: !!evt.shift,
-      meta: !!evt.meta,
-      local_stack: value.local,
-      host_open: props.api.ui.dialog.open,
-      host_depth: props.api.ui.dialog.depth,
-    })
-
     const next = current(props.api, props.route)
     if (props.api.ui.dialog.open) {
       if (props.keys.match("dialog_close", evt)) {
         evt.preventDefault()
         evt.stopPropagation()
-        dbg("key.host_close")
         props.api.ui.dialog.clear()
         return
       }
-      dbg("key.skip_host_open")
       return
     }
 
@@ -354,7 +378,6 @@ const Screen = (props: {
         evt.preventDefault()
         evt.stopPropagation()
         pop(next)
-        dbg("key.local_close")
         return
       }
 
@@ -362,10 +385,8 @@ const Screen = (props: {
         evt.preventDefault()
         evt.stopPropagation()
         push(next)
-        dbg("key.local_push")
         return
       }
-      dbg("key.local_no_match")
       return
     }
 
@@ -373,7 +394,6 @@ const Screen = (props: {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate("home")
-      dbg("key.home")
       return
     }
 
@@ -409,7 +429,6 @@ const Screen = (props: {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.modal, next)
-      dbg("key.modal_route")
       return
     }
 
@@ -417,43 +436,41 @@ const Screen = (props: {
       evt.preventDefault()
       evt.stopPropagation()
       open()
-      dbg("key.local_open")
       return
     }
 
     if (props.keys.match("host", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
-      host()
-      dbg("key.host_open")
+      host(props.api, props.input, skin)
       return
     }
 
     if (props.keys.match("alert", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
-      props.api.route.navigate(props.route.alert, next)
+      warn(props.api, props.route, next)
       return
     }
 
     if (props.keys.match("confirm", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
-      props.api.route.navigate(props.route.confirm, next)
+      check(props.api, props.route, next)
       return
     }
 
     if (props.keys.match("prompt", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
-      props.api.route.navigate(props.route.prompt, next)
+      entry(props.api, props.route, next)
       return
     }
 
     if (props.keys.match("select", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
-      props.api.route.navigate(props.route.select, next)
+      picker(props.api, props.route, next)
     }
   })
 
@@ -541,11 +558,11 @@ const Screen = (props: {
           <Btn txt="go home" run={() => props.api.route.navigate("home")} skin={skin} />
           <Btn txt="modal" run={() => props.api.route.navigate(props.route.modal, value)} skin={skin} on />
           <Btn txt="local overlay" run={show} skin={skin} />
-          <Btn txt="host overlay" run={host} skin={skin} />
-          <Btn txt="alert" run={() => props.api.route.navigate(props.route.alert, value)} skin={skin} />
-          <Btn txt="confirm" run={() => props.api.route.navigate(props.route.confirm, value)} skin={skin} />
-          <Btn txt="prompt" run={() => props.api.route.navigate(props.route.prompt, value)} skin={skin} />
-          <Btn txt="select" run={() => props.api.route.navigate(props.route.select, value)} skin={skin} />
+          <Btn txt="host overlay" run={() => host(props.api, props.input, skin)} skin={skin} />
+          <Btn txt="alert" run={() => warn(props.api, props.route, value)} skin={skin} />
+          <Btn txt="confirm" run={() => check(props.api, props.route, value)} skin={skin} />
+          <Btn txt="prompt" run={() => entry(props.api, props.route, value)} skin={skin} />
+          <Btn txt="select" run={() => picker(props.api, props.route, value)} skin={skin} />
         </box>
       </box>
 
@@ -561,13 +578,11 @@ const Screen = (props: {
         top={0}
         backgroundColor={RGBA.fromInts(0, 0, 0, 160)}
         onMouseUp={() => {
-          dbg("local.backdrop.click")
           pop()
         }}
       >
         <box
           onMouseUp={(evt) => {
-            dbg("local.panel.click")
             evt.stopPropagation()
           }}
           width={60}
@@ -649,164 +664,6 @@ const Modal = (props: {
             <Btn txt="cancel" run={() => props.api.route.navigate("home")} skin={skin} />
           </box>
         </box>
-      </Dialog>
-    </box>
-  )
-}
-
-const AlertDialog = (props: {
-  api: TuiApi
-  route: ReturnType<typeof names>
-  keys: Keys
-  params?: Record<string, unknown>
-}) => {
-  const Dialog = props.api.ui.Dialog
-  const DialogAlert = props.api.ui.DialogAlert
-  const value = parse(props.params)
-  const skin = tone(props.api)
-
-  useKeyboard((evt) => {
-    if (props.api.route.current.name !== props.route.alert) return
-    if (!props.keys.match("dialog_close", evt)) return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.api.route.navigate(props.route.screen, value)
-  })
-
-  return (
-    <box width="100%" height="100%" backgroundColor={skin.panel}>
-      <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
-        <DialogAlert
-          title="Smoke alert"
-          message="Testing built-in alert dialog"
-          onConfirm={() => props.api.route.navigate(props.route.screen, { ...value, source: "alert" })}
-        />
-      </Dialog>
-    </box>
-  )
-}
-
-const ConfirmDialog = (props: {
-  api: TuiApi
-  route: ReturnType<typeof names>
-  keys: Keys
-  params?: Record<string, unknown>
-}) => {
-  const Dialog = props.api.ui.Dialog
-  const DialogConfirm = props.api.ui.DialogConfirm
-  const value = parse(props.params)
-  const skin = tone(props.api)
-
-  useKeyboard((evt) => {
-    if (props.api.route.current.name !== props.route.confirm) return
-    if (!props.keys.match("dialog_close", evt)) return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.api.route.navigate(props.route.screen, value)
-  })
-
-  return (
-    <box width="100%" height="100%" backgroundColor={skin.panel}>
-      <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
-        <DialogConfirm
-          title="Smoke confirm"
-          message="Apply +1 to counter?"
-          onConfirm={() =>
-            props.api.route.navigate(props.route.screen, { ...value, count: value.count + 1, source: "confirm" })
-          }
-          onCancel={() => props.api.route.navigate(props.route.screen, { ...value, source: "confirm-cancel" })}
-        />
-      </Dialog>
-    </box>
-  )
-}
-
-const PromptDialog = (props: {
-  api: TuiApi
-  route: ReturnType<typeof names>
-  keys: Keys
-  params?: Record<string, unknown>
-}) => {
-  const Dialog = props.api.ui.Dialog
-  const DialogPrompt = props.api.ui.DialogPrompt
-  const value = parse(props.params)
-  const skin = tone(props.api)
-
-  useKeyboard((evt) => {
-    if (props.api.route.current.name !== props.route.prompt) return
-    if (!props.keys.match("dialog_close", evt)) return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.api.route.navigate(props.route.screen, value)
-  })
-
-  return (
-    <box width="100%" height="100%" backgroundColor={skin.panel}>
-      <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
-        <DialogPrompt
-          title="Smoke prompt"
-          description={() => <text fg={skin.muted}>Enter a note to store in route params</text>}
-          value={value.note}
-          onConfirm={(note) => props.api.route.navigate(props.route.screen, { ...value, note, source: "prompt" })}
-          onCancel={() => props.api.route.navigate(props.route.screen, value)}
-        />
-      </Dialog>
-    </box>
-  )
-}
-
-const SelectDialog = (props: {
-  api: TuiApi
-  route: ReturnType<typeof names>
-  keys: Keys
-  params?: Record<string, unknown>
-}) => {
-  const Dialog = props.api.ui.Dialog
-  const DialogSelect = props.api.ui.DialogSelect
-  const value = parse(props.params)
-  const skin = tone(props.api)
-  const options = [
-    {
-      title: "Overview",
-      value: 0,
-      description: "Switch to overview tab",
-    },
-    {
-      title: "Counter",
-      value: 1,
-      description: "Switch to counter tab",
-    },
-    {
-      title: "Help",
-      value: 2,
-      description: "Switch to help tab",
-    },
-  ]
-
-  useKeyboard((evt) => {
-    if (props.api.route.current.name !== props.route.select) return
-    if (!props.keys.match("dialog_close", evt)) return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.api.route.navigate(props.route.screen, value)
-  })
-
-  return (
-    <box width="100%" height="100%" backgroundColor={skin.panel}>
-      <Dialog onClose={() => props.api.route.navigate(props.route.screen, value)}>
-        <DialogSelect
-          title="Smoke select"
-          options={options}
-          current={value.tab}
-          onSelect={(item) =>
-            props.api.route.navigate(props.route.screen, {
-              ...value,
-              tab: typeof item.value === "number" ? item.value : value.tab,
-              selected: item.title,
-              source: "select",
-            })
-          }
-        />
       </Dialog>
     </box>
   )
@@ -912,7 +769,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
         name: "smoke-alert",
       },
       onSelect: () => {
-        api.route.navigate(route.alert, current(api, route))
+        warn(api, route, current(api, route))
       },
     },
     {
@@ -923,7 +780,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
         name: "smoke-confirm",
       },
       onSelect: () => {
-        api.route.navigate(route.confirm, current(api, route))
+        check(api, route, current(api, route))
       },
     },
     {
@@ -934,7 +791,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
         name: "smoke-prompt",
       },
       onSelect: () => {
-        api.route.navigate(route.prompt, current(api, route))
+        entry(api, route, current(api, route))
       },
     },
     {
@@ -945,7 +802,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
         name: "smoke-select",
       },
       onSelect: () => {
-        api.route.navigate(route.select, current(api, route))
+        picker(api, route, current(api, route))
       },
     },
     {
@@ -957,9 +814,7 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
         name: "smoke-host",
       },
       onSelect: () => {
-        const DialogAlert = api.ui.DialogAlert
-        api.ui.dialog.setSize("medium")
-        api.ui.dialog.replace(() => <DialogAlert title="Smoke host overlay" message="Opened via api.ui.dialog stack" />)
+        host(api, input, tone(api))
       },
     },
     {
@@ -1007,22 +862,6 @@ const tui = async (input: TuiPluginInput, options?: Record<string, unknown>) => 
     {
       name: route.modal,
       render: ({ params }) => <Modal api={input.api} input={value} route={route} keys={keys} params={params} />,
-    },
-    {
-      name: route.alert,
-      render: ({ params }) => <AlertDialog api={input.api} route={route} keys={keys} params={params} />,
-    },
-    {
-      name: route.confirm,
-      render: ({ params }) => <ConfirmDialog api={input.api} route={route} keys={keys} params={params} />,
-    },
-    {
-      name: route.prompt,
-      render: ({ params }) => <PromptDialog api={input.api} route={route} keys={keys} params={params} />,
-    },
-    {
-      name: route.select,
-      render: ({ params }) => <SelectDialog api={input.api} route={route} keys={keys} params={params} />,
     },
   ])
 

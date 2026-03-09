@@ -275,15 +275,8 @@ function App() {
         }
       },
       navigate(name, params) {
-        console.log("[route-debug] navigate", {
-          from: route.data.type,
-          to: name,
-          params,
-          dialog_depth: dialog.stack.length,
-        })
         if (name === "home") {
           route.navigate({ type: "home" })
-          console.log("[route-debug] navigate.home")
           return
         }
 
@@ -291,12 +284,10 @@ function App() {
           const sessionID = params?.sessionID
           if (typeof sessionID !== "string") return
           route.navigate({ type: "session", sessionID })
-          console.log("[route-debug] navigate.session", { sessionID })
           return
         }
 
         route.navigate({ type: "plugin", id: name, data: params })
-        console.log("[route-debug] navigate.plugin", { id: name })
       },
       get current() {
         if (route.data.type === "home") return { name: "home" }
@@ -387,15 +378,12 @@ function App() {
       },
       dialog: {
         replace(render, onClose) {
-          console.log("[ui-dialog-debug] replace", { depth: dialog.stack.length })
           dialog.replace(render, onClose)
         },
         clear() {
-          console.log("[ui-dialog-debug] clear", { depth: dialog.stack.length })
           dialog.clear()
         },
         setSize(size) {
-          console.log("[ui-dialog-debug] setSize", { depth: dialog.stack.length, size })
           dialog.setSize(size)
         },
         get size() {

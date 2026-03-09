@@ -23,15 +23,12 @@ export function Dialog(
     <box
       onMouseDown={() => {
         dismiss = !!renderer.getSelection()
-        console.log("[dialog-debug] backdrop.mousedown", { dismiss })
       }}
       onMouseUp={() => {
-        console.log("[dialog-debug] backdrop.mouseup", { dismiss })
         if (dismiss) {
           dismiss = false
           return
         }
-        console.log("[dialog-debug] backdrop.close")
         props.onClose?.()
       }}
       width={dimensions().width}
@@ -46,7 +43,6 @@ export function Dialog(
     >
       <box
         onMouseUp={(e) => {
-          console.log("[dialog-debug] panel.mouseup")
           dismiss = false
           e.stopPropagation()
         }}
@@ -74,21 +70,12 @@ function init() {
 
   useKeyboard((evt) => {
     if (store.stack.length === 0) return
-    console.log("[dialog-debug] key", {
-      name: evt.name,
-      ctrl: !!evt.ctrl,
-      default_prevented: evt.defaultPrevented,
-      stack: store.stack.length,
-      has_selection: !!renderer.getSelection(),
-    })
     if (evt.defaultPrevented) return
     if ((evt.name === "escape" || (evt.ctrl && evt.name === "c")) && renderer.getSelection()?.getSelectedText()) return
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
       if (renderer.getSelection()) {
-        console.log("[dialog-debug] key.selection_clear")
         renderer.clearSelection()
       }
-      console.log("[dialog-debug] key.close")
       const current = store.stack.at(-1)!
       current.onClose?.()
       setStore("stack", store.stack.slice(0, -1))
@@ -118,7 +105,6 @@ function init() {
 
   return {
     clear() {
-      console.log("[dialog-debug] clear", { stack: store.stack.length, size: store.size })
       for (const item of store.stack) {
         if (item.onClose) item.onClose()
       }
@@ -129,7 +115,6 @@ function init() {
       refocus()
     },
     replace(input: any, onClose?: () => void) {
-      console.log("[dialog-debug] replace", { stack: store.stack.length, size: store.size })
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
         focus?.blur()
@@ -152,7 +137,6 @@ function init() {
       return store.size
     },
     setSize(size: "medium" | "large") {
-      console.log("[dialog-debug] setSize", { from: store.size, to: size })
       setStore("size", size)
     },
   }
