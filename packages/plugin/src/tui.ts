@@ -66,6 +66,15 @@ export type TuiDialogProps<Node = unknown> = {
   children?: Node
 }
 
+export type TuiDialogStack<Node = unknown> = {
+  replace: (render: () => Node, onClose?: () => void) => void
+  clear: () => void
+  setSize: (size: "medium" | "large") => void
+  readonly size: "medium" | "large"
+  readonly depth: number
+  readonly open: boolean
+}
+
 export type TuiDialogAlertProps = {
   title: string
   message: string
@@ -144,6 +153,7 @@ export type TuiApi<Node = unknown> = {
     DialogPrompt: (props: TuiDialogPromptProps<Node>) => Node
     DialogSelect: <Value = unknown>(props: TuiDialogSelectProps<Value, Node>) => Node
     toast: (input: TuiToast) => void
+    dialog: TuiDialogStack<Node>
   }
   keybind: {
     parse: (evt: ParsedKey) => TuiKeybind

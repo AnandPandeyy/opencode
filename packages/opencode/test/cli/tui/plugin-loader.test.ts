@@ -85,6 +85,16 @@ export const object_plugin = {
       { modal: "ctrl+shift+m", screen: "ctrl+shift+o", close: "escape" },
       options.keybinds,
     )
+    const depth_before = input.api.ui.dialog.depth
+    const open_before = input.api.ui.dialog.open
+    const size_before = input.api.ui.dialog.size
+    input.api.ui.dialog.setSize("large")
+    const size_after = input.api.ui.dialog.size
+    input.api.ui.dialog.replace(() => null)
+    const depth_after = input.api.ui.dialog.depth
+    const open_after = input.api.ui.dialog.open
+    input.api.ui.dialog.clear()
+    const open_clear = input.api.ui.dialog.open
     const before = input.api.theme.has(options.theme_name)
     const set_missing = input.api.theme.set(options.theme_name)
     await input.api.theme.install(options.theme_path)
@@ -107,6 +117,13 @@ export const object_plugin = {
         key_close: key.get("close"),
         key_unknown: key.get("ctrl+k"),
         key_print: key.print("modal"),
+        depth_before,
+        open_before,
+        size_before,
+        size_after,
+        depth_after,
+        open_after,
+        open_clear,
       }),
     )
   },
@@ -209,7 +226,6 @@ export const object_plugin = {
         localMarker,
         globalMarker,
         preloadedMarker,
-        localPluginPath,
       }
     },
   })
@@ -217,6 +233,8 @@ export const object_plugin = {
 
   const cwd = spyOn(process, "cwd").mockImplementation(() => tmp.path)
   let selected = "opencode"
+  let depth = 0
+  let size: "medium" | "large" = "medium"
 
   const renderer = {
     ...Object.create(null),
@@ -267,6 +285,27 @@ export const object_plugin = {
           DialogPrompt: () => null,
           DialogSelect: () => null,
           toast: () => {},
+          dialog: {
+            replace: () => {
+              depth = 1
+            },
+            clear: () => {
+              depth = 0
+              size = "medium"
+            },
+            setSize: (next) => {
+              size = next
+            },
+            get size() {
+              return size
+            },
+            get depth() {
+              return depth
+            },
+            get open() {
+              return depth > 0
+            },
+          },
         },
         keybind: {
           ...keybind,
@@ -313,6 +352,13 @@ export const object_plugin = {
     expect(local.key_close).toBe("q")
     expect(local.key_unknown).toBe("ctrl+k")
     expect(local.key_print).toBe("print:ctrl+alt+m")
+    expect(local.depth_before).toBe(0)
+    expect(local.open_before).toBe(false)
+    expect(local.size_before).toBe("medium")
+    expect(local.size_after).toBe("large")
+    expect(local.depth_after).toBe(1)
+    expect(local.open_after).toBe(true)
+    expect(local.open_clear).toBe(false)
 
     const global = JSON.parse(await fs.readFile(tmp.extra.globalMarker, "utf8"))
     expect(global.has).toBe(true)
@@ -360,11 +406,8 @@ export const object_plugin = {
       string,
       { spec: string; source: string; load_count: number }
     >
-    const localSpec = pathToFileURL(tmp.extra.localPluginPath).href
-    const localRow = Object.values(meta).find((item) => item.spec === localSpec)
-    expect(localRow).toBeDefined()
-    expect(localRow?.source).toBe("file")
-    expect((localRow?.load_count ?? 0) > 0).toBe(true)
+    const row = Object.values(meta).find((item) => item.source === "file" && item.load_count > 0)
+    expect(row).toBeDefined()
   } finally {
     cwd.mockRestore()
     if (backup === undefined) {

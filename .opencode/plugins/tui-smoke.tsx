@@ -3,6 +3,7 @@ import { extend, useKeyboard, useTerminalDimensions, type RenderableConstructor 
 import { RGBA, VignetteEffect, type OptimizedBuffer, type RenderContext } from "@opentui/core"
 import { ThreeRenderable, THREE } from "@opentui/core/3d"
 import type { TuiApi, TuiKeybindSet, TuiPluginInput } from "@opencode-ai/plugin/tui"
+import { createEffect } from "solid-js"
 
 const tabs = ["overview", "counter", "help"]
 const bind = {
@@ -20,6 +21,14 @@ const bind = {
   modal_accept: "enter,return",
   modal_close: "escape",
   dialog_close: "escape",
+  local: "x",
+  local_push: "enter,return",
+  local_close: "q,backspace",
+  host: "z",
+}
+
+const dbg = (...value: unknown[]) => {
+  console.log("[smoke-debug]", ...value)
 }
 
 const pick = (value: unknown, fallback: string) => {
@@ -198,7 +207,10 @@ extend({ smoke_cube: Cube as unknown as RenderableConstructor })
 const Btn = (props: { txt: string; run: () => void; skin: Skin; on?: boolean }) => {
   return (
     <box
-      onMouseUp={props.run}
+      onMouseUp={() => {
+        dbg("button", props.txt)
+        props.run()
+      }}
       backgroundColor={props.on ? props.skin.accent : props.skin.border}
       paddingLeft={1}
       paddingRight={1}
@@ -214,12 +226,14 @@ const parse = (params: Record<string, unknown> | undefined) => {
   const source = typeof params?.source === "string" ? params.source : "unknown"
   const note = typeof params?.note === "string" ? params.note : ""
   const selected = typeof params?.selected === "string" ? params.selected : ""
+  const local = typeof params?.local === "number" ? params.local : 0
   return {
     tab: Math.max(0, Math.min(tab, tabs.length - 1)),
     count,
     source,
     note,
     selected,
+    local: Math.max(0, local),
   }
 }
 
@@ -241,16 +255,125 @@ const Screen = (props: {
   const dim = useTerminalDimensions()
   const value = parse(props.params)
   const skin = tone(props.api)
+  const set = (local: number, base?: ReturnType<typeof parse>) => {
+    const next = base ?? current(props.api, props.route)
+    props.api.route.navigate(props.route.screen, { ...next, local: Math.max(0, local), source: "local" })
+  }
+  const push = (base?: ReturnType<typeof parse>) => {
+    const next = base ?? current(props.api, props.route)
+    dbg("local.push", { next: next.local + 1 })
+    set(next.local + 1, next)
+  }
+  const open = () => {
+    const next = current(props.api, props.route)
+    if (next.local > 0) {
+      dbg("local.open.skip", { next: next.local })
+      return
+    }
+    dbg("local.open", { next: 1 })
+    set(1, next)
+  }
+  const pop = (base?: ReturnType<typeof parse>) => {
+    const next = base ?? current(props.api, props.route)
+    const local = Math.max(0, next.local - 1)
+    dbg("local.pop", { next: local })
+    set(local, next)
+  }
+  const show = () => {
+    dbg("local.show.click")
+    setTimeout(() => {
+      dbg("local.show.timeout")
+      open()
+    }, 0)
+  }
+  const host = () => {
+    dbg("host.show", {
+      open: props.api.ui.dialog.open,
+      depth: props.api.ui.dialog.depth,
+    })
+    props.api.ui.dialog.setSize("medium")
+    props.api.ui.dialog.replace(() => (
+      <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
+        <text fg={skin.text}>
+          <b>{props.input.label} host overlay</b>
+        </text>
+        <text fg={skin.muted}>Using api.ui.dialog stack with built-in backdrop</text>
+        <text fg={skin.muted}>esc closes · depth {props.api.ui.dialog.depth}</text>
+        <box flexDirection="row" gap={1}>
+          <Btn txt="close" run={() => props.api.ui.dialog.clear()} skin={skin} on />
+        </box>
+      </box>
+    ))
+    dbg("host.show.done", {
+      open: props.api.ui.dialog.open,
+      depth: props.api.ui.dialog.depth,
+    })
+  }
 
+  createEffect(() => {
+    dbg("screen.state", {
+      local: value.local,
+      host_open: props.api.ui.dialog.open,
+      host_depth: props.api.ui.dialog.depth,
+      route: props.api.route.current.name,
+      width: dim().width,
+      height: dim().height,
+    })
+  })
+  createEffect(() => {
+    if (value.local === 0) return
+    dbg("local.overlay.visible", { local: value.local })
+  })
   useKeyboard((evt) => {
     if (props.api.route.current.name !== props.route.screen) return
+    dbg("key", {
+      name: evt.name,
+      ctrl: !!evt.ctrl,
+      shift: !!evt.shift,
+      meta: !!evt.meta,
+      local_stack: value.local,
+      host_open: props.api.ui.dialog.open,
+      host_depth: props.api.ui.dialog.depth,
+    })
 
     const next = current(props.api, props.route)
+    if (props.api.ui.dialog.open) {
+      if (props.keys.match("dialog_close", evt)) {
+        evt.preventDefault()
+        evt.stopPropagation()
+        dbg("key.host_close")
+        props.api.ui.dialog.clear()
+        return
+      }
+      dbg("key.skip_host_open")
+      return
+    }
+
+    if (next.local > 0) {
+      if (evt.name === "escape" || props.keys.match("local_close", evt)) {
+        evt.preventDefault()
+        evt.stopPropagation()
+        pop(next)
+        dbg("key.local_close")
+        return
+      }
+
+      if (props.keys.match("local_push", evt)) {
+        evt.preventDefault()
+        evt.stopPropagation()
+        push(next)
+        dbg("key.local_push")
+        return
+      }
+      dbg("key.local_no_match")
+      return
+    }
 
     if (props.keys.match("home", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate("home")
+      dbg("key.home")
       return
     }
 
@@ -286,6 +409,23 @@ const Screen = (props: {
       evt.preventDefault()
       evt.stopPropagation()
       props.api.route.navigate(props.route.modal, next)
+      dbg("key.modal_route")
+      return
+    }
+
+    if (props.keys.match("local", evt)) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      open()
+      dbg("key.local_open")
+      return
+    }
+
+    if (props.keys.match("host", evt)) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      host()
+      dbg("key.host_open")
       return
     }
 
@@ -318,7 +458,7 @@ const Screen = (props: {
   })
 
   return (
-    <box width={dim().width} height={dim().height} backgroundColor={skin.panel}>
+    <box width={dim().width} height={dim().height} backgroundColor={skin.panel} position="relative">
       <box
         flexDirection="column"
         width="100%"
@@ -365,6 +505,8 @@ const Screen = (props: {
               <text fg={skin.muted}>source: {value.source}</text>
               <text fg={skin.muted}>note: {value.note || "(none)"}</text>
               <text fg={skin.muted}>selected: {value.selected || "(none)"}</text>
+              <text fg={skin.muted}>local stack depth: {value.local}</text>
+              <text fg={skin.muted}>host stack open: {props.api.ui.dialog.open ? "yes" : "no"}</text>
             </box>
           ) : null}
 
@@ -383,6 +525,13 @@ const Screen = (props: {
                 {props.keys.print("modal")} modal | {props.keys.print("alert")} alert | {props.keys.print("confirm")}{" "}
                 confirm | {props.keys.print("prompt")} prompt | {props.keys.print("select")} select
               </text>
+              <text fg={skin.muted}>
+                {props.keys.print("local")} local stack | {props.keys.print("host")} host stack
+              </text>
+              <text fg={skin.muted}>
+                local open: {props.keys.print("local_push")} push nested · esc or {props.keys.print("local_close")}{" "}
+                close
+              </text>
               <text fg={skin.muted}>{props.keys.print("home")} returns home</text>
             </box>
           ) : null}
@@ -391,10 +540,59 @@ const Screen = (props: {
         <box flexDirection="row" gap={1} paddingTop={1}>
           <Btn txt="go home" run={() => props.api.route.navigate("home")} skin={skin} />
           <Btn txt="modal" run={() => props.api.route.navigate(props.route.modal, value)} skin={skin} on />
+          <Btn txt="local overlay" run={show} skin={skin} />
+          <Btn txt="host overlay" run={host} skin={skin} />
           <Btn txt="alert" run={() => props.api.route.navigate(props.route.alert, value)} skin={skin} />
           <Btn txt="confirm" run={() => props.api.route.navigate(props.route.confirm, value)} skin={skin} />
           <Btn txt="prompt" run={() => props.api.route.navigate(props.route.prompt, value)} skin={skin} />
           <Btn txt="select" run={() => props.api.route.navigate(props.route.select, value)} skin={skin} />
+        </box>
+      </box>
+
+      <box
+        visible={value.local > 0}
+        width={dim().width}
+        height={dim().height}
+        alignItems="center"
+        position="absolute"
+        zIndex={3000}
+        paddingTop={dim().height / 4}
+        left={0}
+        top={0}
+        backgroundColor={RGBA.fromInts(0, 0, 0, 160)}
+        onMouseUp={() => {
+          dbg("local.backdrop.click")
+          pop()
+        }}
+      >
+        <box
+          onMouseUp={(evt) => {
+            dbg("local.panel.click")
+            evt.stopPropagation()
+          }}
+          width={60}
+          maxWidth={dim().width - 2}
+          backgroundColor={skin.panel}
+          border
+          borderColor={skin.border}
+          paddingTop={1}
+          paddingBottom={1}
+          paddingLeft={2}
+          paddingRight={2}
+          gap={1}
+          flexDirection="column"
+        >
+          <text fg={skin.text}>
+            <b>{props.input.label} local overlay</b>
+          </text>
+          <text fg={skin.muted}>Plugin-owned stack depth: {value.local}</text>
+          <text fg={skin.muted}>
+            {props.keys.print("local_push")} push nested · {props.keys.print("local_close")} pop/close
+          </text>
+          <box flexDirection="row" gap={1}>
+            <Btn txt="push" run={push} skin={skin} on />
+            <Btn txt="pop" run={pop} skin={skin} />
+          </box>
         </box>
       </box>
     </box>
@@ -748,6 +946,20 @@ const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
       },
       onSelect: () => {
         api.route.navigate(route.select, current(api, route))
+      },
+    },
+    {
+      title: `${input.label} host overlay`,
+      value: "plugin.smoke.host",
+      keybind: keys.get("host"),
+      category: "Plugin",
+      slash: {
+        name: "smoke-host",
+      },
+      onSelect: () => {
+        const DialogAlert = api.ui.DialogAlert
+        api.ui.dialog.setSize("medium")
+        api.ui.dialog.replace(() => <DialogAlert title="Smoke host overlay" message="Opened via api.ui.dialog stack" />)
       },
     },
     {
