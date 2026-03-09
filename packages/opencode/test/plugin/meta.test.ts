@@ -26,7 +26,7 @@ describe("plugin.meta", () => {
     const spec = pathToFileURL(tmp.extra.file).href
 
     const one = await PluginMeta.touch(spec, spec)
-    expect(one.state).toBe("new")
+    expect(one.state).toBe("first")
     expect(one.entry.source).toBe("file")
     expect(one.entry.modified).toBeDefined()
 
@@ -38,7 +38,7 @@ describe("plugin.meta", () => {
     await Bun.write(tmp.extra.file, "export default async () => ({ ok: true })\n")
 
     const three = await PluginMeta.touch(spec, spec)
-    expect(three.state).toBe("changed")
+    expect(three.state).toBe("updated")
     expect(three.entry.load_count).toBe(3)
     expect((three.entry.modified ?? 0) >= (one.entry.modified ?? 0)).toBe(true)
 
@@ -66,7 +66,7 @@ describe("plugin.meta", () => {
     const file = process.env.OPENCODE_PLUGIN_META_FILE!
 
     const one = await PluginMeta.touch("acme-plugin@latest", tmp.extra.mod)
-    expect(one.state).toBe("new")
+    expect(one.state).toBe("first")
     expect(one.entry.source).toBe("npm")
     expect(one.entry.requested).toBe("latest")
     expect(one.entry.version).toBe("1.0.0")
@@ -74,7 +74,7 @@ describe("plugin.meta", () => {
     await Bun.write(tmp.extra.pkg, JSON.stringify({ name: "acme-plugin", version: "1.1.0" }, null, 2))
 
     const two = await PluginMeta.touch("acme-plugin@latest", tmp.extra.mod)
-    expect(two.state).toBe("changed")
+    expect(two.state).toBe("updated")
     expect(two.entry.version).toBe("1.1.0")
     expect(two.entry.load_count).toBe(2)
     await PluginMeta.persist()

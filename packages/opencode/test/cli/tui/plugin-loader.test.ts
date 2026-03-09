@@ -118,11 +118,9 @@ export const object_plugin = {
     await Bun.write(options.source, JSON.stringify({ theme: { primary: "#fefefe" } }, null, 2))
     await input.api.theme.install(options.theme_path)
     const second = await Bun.file(options.dest).text()
-    const init_state = init?.state ?? null
-    const init_first = init?.first ?? null
-    const init_updated = init?.updated ?? null
-    const init_source = init?.entry?.source ?? null
-    const init_load_count = init?.entry?.load_count ?? null
+    const init_state = init.state
+    const init_source = init.entry.source
+    const init_load_count = init.entry.load_count
     await Bun.write(
       options.marker,
       JSON.stringify({
@@ -144,8 +142,6 @@ export const object_plugin = {
         open_after,
         open_clear,
         init_state,
-        init_first,
-        init_updated,
         init_source,
         init_load_count,
       }),
@@ -170,11 +166,9 @@ export const object_plugin = {
         before,
         after,
         text,
-        init_state: init?.state ?? null,
-        init_first: init?.first ?? null,
-        init_updated: init?.updated ?? null,
-        init_source: init?.entry?.source ?? null,
-        init_load_count: init?.entry?.load_count ?? null,
+        init_state: init.state,
+        init_source: init.entry.source,
+        init_load_count: init.entry.load_count,
       }),
     )
   },
@@ -196,11 +190,9 @@ export const object_plugin = {
         has,
         set_installed,
         selected: input.api.theme.selected,
-        init_state: init?.state ?? null,
-        init_first: init?.first ?? null,
-        init_updated: init?.updated ?? null,
-        init_source: init?.entry?.source ?? null,
-        init_load_count: init?.entry?.load_count ?? null,
+        init_state: init.state,
+        init_source: init.entry.source,
+        init_load_count: init.entry.load_count,
       }),
     )
   },
@@ -418,8 +410,6 @@ export const object_plugin = {
     expect(local.open_after).toBe(true)
     expect(local.open_clear).toBe(false)
     expect(local.init_state).toBe("same")
-    expect(local.init_first).toBe(false)
-    expect(local.init_updated).toBe(false)
     expect(local.init_source).toBe("file")
     expect(local.init_load_count).toBe(2)
 
@@ -427,9 +417,7 @@ export const object_plugin = {
     expect(global.has).toBe(true)
     expect(global.set_installed).toBe(true)
     expect(global.selected).toBe(tmp.extra.globalThemeName)
-    expect(global.init_state).toBe("changed")
-    expect(global.init_first).toBe(false)
-    expect(global.init_updated).toBe(true)
+    expect(global.init_state).toBe("updated")
     expect(global.init_source).toBe("file")
     expect(global.init_load_count).toBe(2)
 
@@ -438,9 +426,7 @@ export const object_plugin = {
     expect(preloaded.after).toBe(true)
     expect(preloaded.text).toContain("#303030")
     expect(preloaded.text).not.toContain("#f0f0f0")
-    expect(preloaded.init_state).toBe("new")
-    expect(preloaded.init_first).toBe(true)
-    expect(preloaded.init_updated).toBe(false)
+    expect(preloaded.init_state).toBe("first")
     expect(preloaded.init_source).toBe("file")
     expect(preloaded.init_load_count).toBe(1)
 

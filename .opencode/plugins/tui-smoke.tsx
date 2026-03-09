@@ -529,8 +529,8 @@ const Screen = (props: {
               <text fg={skin.text}>Route: {props.route.screen}</text>
               <text fg={skin.muted}>plugin state: {props.meta.state}</text>
               <text fg={skin.muted}>
-                first: {props.meta.first ? "yes" : "no"} · updated: {props.meta.updated ? "yes" : "no"} · loads:{" "}
-                {props.meta.entry.load_count}
+                first: {props.meta.state === "first" ? "yes" : "no"} · updated:{" "}
+                {props.meta.state === "updated" ? "yes" : "no"} · loads: {props.meta.entry.load_count}
               </text>
               <text fg={skin.muted}>plugin source: {props.meta.entry.source}</text>
               <text fg={skin.muted}>source: {value.source}</text>

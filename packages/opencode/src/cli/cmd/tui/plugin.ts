@@ -220,14 +220,10 @@ export namespace TuiPlugin {
           const init: TuiPluginInit = meta
             ? {
                 state: meta.state,
-                first: meta.state === "new",
-                updated: meta.state === "changed",
                 entry: meta.entry,
               }
             : {
-                state: "new",
-                first: true,
-                updated: false,
+                state: "first",
                 entry: {
                   name: spec,
                   source: spec.startsWith("file://") ? "file" : "npm",

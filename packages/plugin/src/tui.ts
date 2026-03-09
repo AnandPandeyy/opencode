@@ -189,7 +189,7 @@ export type TuiEventBus = {
   ) => () => void
 }
 
-export type TuiPluginState = "new" | "changed" | "same"
+export type TuiPluginState = "first" | "updated" | "same"
 
 export type TuiPluginMeta = {
   name: string
@@ -208,8 +208,6 @@ export type TuiPluginMeta = {
 
 export type TuiPluginInit = {
   state: TuiPluginState
-  first: boolean
-  updated: boolean
   entry: TuiPluginMeta
 }
 

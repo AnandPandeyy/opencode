@@ -25,7 +25,7 @@ export namespace PluginMeta {
     fingerprint: string
   }
 
-  export type State = "new" | "changed" | "same"
+  export type State = "first" | "updated" | "same"
 
   type Store = Record<string, Entry>
   type Core = Omit<Entry, "first_time" | "last_time" | "time_changed" | "load_count" | "fingerprint">
@@ -135,8 +135,8 @@ export namespace PluginMeta {
       fingerprint: fingerprint(core),
     }
 
-    const state: State = !prev ? "new" : prev.fingerprint === entry.fingerprint ? "same" : "changed"
-    if (state === "changed") entry.time_changed = now
+    const state: State = !prev ? "first" : prev.fingerprint === entry.fingerprint ? "same" : "updated"
+    if (state === "updated") entry.time_changed = now
 
     cache.store[id] = entry
     cache.dirty = true
