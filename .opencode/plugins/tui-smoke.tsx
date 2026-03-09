@@ -42,6 +42,27 @@ const rec = (value: unknown) => {
   return value as Record<string, unknown>
 }
 
+type Cfg = {
+  label: string
+  route: string
+  vignette: number
+  keybinds: Record<string, unknown> | undefined
+}
+
+type Route = {
+  modal: string
+  screen: string
+}
+
+type State = {
+  tab: number
+  count: number
+  source: string
+  note: string
+  selected: string
+  local: number
+}
+
 const cfg = (options: Record<string, unknown> | undefined) => {
   return {
     label: pick(options?.label, "smoke"),
@@ -51,7 +72,7 @@ const cfg = (options: Record<string, unknown> | undefined) => {
   }
 }
 
-const names = (input: ReturnType<typeof cfg>) => {
+const names = (input: Cfg) => {
   return {
     modal: `${input.route}.modal`,
     screen: `${input.route}.screen`,
@@ -87,7 +108,14 @@ const tone = (api: TuiApi) => {
   }
 }
 
-type Skin = ReturnType<typeof tone>
+type Skin = {
+  panel: Color
+  border: Color
+  text: Color
+  muted: Color
+  accent: Color
+  selected: Color
+}
 type CubeOpts = ConstructorParameters<typeof ThreeRenderable>[1] & {
   tint?: Color
   spec?: Color
@@ -227,7 +255,7 @@ const parse = (params: Record<string, unknown> | undefined) => {
   }
 }
 
-const current = (api: TuiApi, route: ReturnType<typeof names>) => {
+const current = (api: TuiApi, route: Route) => {
   const value = api.route.current
   const ok = Object.values(route).includes(value.name)
   if (!ok) return parse(undefined)
@@ -253,7 +281,7 @@ const opts = [
   },
 ]
 
-const host = (api: TuiApi, input: ReturnType<typeof cfg>, skin: Skin) => {
+const host = (api: TuiApi, input: Cfg, skin: Skin) => {
   api.ui.dialog.setSize("medium")
   api.ui.dialog.replace(() => (
     <box paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1} flexDirection="column">
@@ -269,7 +297,7 @@ const host = (api: TuiApi, input: ReturnType<typeof cfg>, skin: Skin) => {
   ))
 }
 
-const warn = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+const warn = (api: TuiApi, route: Route, value: State) => {
   const DialogAlert = api.ui.DialogAlert
   api.ui.dialog.setSize("medium")
   api.ui.dialog.replace(() => (
@@ -281,7 +309,7 @@ const warn = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<ty
   ))
 }
 
-const check = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+const check = (api: TuiApi, route: Route, value: State) => {
   const DialogConfirm = api.ui.DialogConfirm
   api.ui.dialog.setSize("medium")
   api.ui.dialog.replace(() => (
@@ -294,7 +322,7 @@ const check = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<t
   ))
 }
 
-const entry = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+const entry = (api: TuiApi, route: Route, value: State) => {
   const DialogPrompt = api.ui.DialogPrompt
   api.ui.dialog.setSize("medium")
   api.ui.dialog.replace(() => (
@@ -313,7 +341,7 @@ const entry = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<t
   ))
 }
 
-const picker = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<typeof parse>) => {
+const picker = (api: TuiApi, route: Route, value: State) => {
   const DialogSelect = api.ui.DialogSelect
   api.ui.dialog.setSize("medium")
   api.ui.dialog.replace(() => (
@@ -336,8 +364,8 @@ const picker = (api: TuiApi, route: ReturnType<typeof names>, value: ReturnType<
 
 const Screen = (props: {
   api: TuiApi
-  input: ReturnType<typeof cfg>
-  route: ReturnType<typeof names>
+  input: Cfg
+  route: Route
   keys: Keys
   meta: TuiPluginInit
   params?: Record<string, unknown>
@@ -345,11 +373,11 @@ const Screen = (props: {
   const dim = useTerminalDimensions()
   const value = parse(props.params)
   const skin = tone(props.api)
-  const set = (local: number, base?: ReturnType<typeof parse>) => {
+  const set = (local: number, base?: State) => {
     const next = base ?? current(props.api, props.route)
     props.api.route.navigate(props.route.screen, { ...next, local: Math.max(0, local), source: "local" })
   }
-  const push = (base?: ReturnType<typeof parse>) => {
+  const push = (base?: State) => {
     const next = base ?? current(props.api, props.route)
     set(next.local + 1, next)
   }
@@ -358,7 +386,7 @@ const Screen = (props: {
     if (next.local > 0) return
     set(1, next)
   }
-  const pop = (base?: ReturnType<typeof parse>) => {
+  const pop = (base?: State) => {
     const next = base ?? current(props.api, props.route)
     const local = Math.max(0, next.local - 1)
     set(local, next)
@@ -628,13 +656,7 @@ const Screen = (props: {
   )
 }
 
-const Modal = (props: {
-  api: TuiApi
-  input: ReturnType<typeof cfg>
-  route: ReturnType<typeof names>
-  keys: Keys
-  params?: Record<string, unknown>
-}) => {
+const Modal = (props: { api: TuiApi; input: Cfg; route: Route; keys: Keys; params?: Record<string, unknown> }) => {
   const Dialog = props.api.ui.Dialog
   const value = parse(props.params)
   const skin = tone(props.api)
@@ -683,7 +705,7 @@ const Modal = (props: {
   )
 }
 
-const slot = (input: ReturnType<typeof cfg>) => ({
+const slot = (input: Cfg) => ({
   id: "workspace-smoke",
   slots: {
     home_logo(ctx) {
@@ -748,7 +770,7 @@ const slot = (input: ReturnType<typeof cfg>) => ({
   },
 })
 
-const reg = (api: TuiApi, input: ReturnType<typeof cfg>, keys: Keys) => {
+const reg = (api: TuiApi, input: Cfg, keys: Keys) => {
   const route = names(input)
   api.command.register(() => [
     {
