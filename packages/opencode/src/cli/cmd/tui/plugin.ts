@@ -10,7 +10,6 @@ import {
 } from "@opencode-ai/plugin/tui"
 import { createSlot, createSolidSlotRegistry, type JSX, type SolidPlugin } from "@opentui/solid"
 import type { CliRenderer } from "@opentui/core"
-import "@opentui/solid/preload"
 import path from "path"
 import { fileURLToPath } from "url"
 
