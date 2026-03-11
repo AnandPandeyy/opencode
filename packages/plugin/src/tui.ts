@@ -1,6 +1,6 @@
 import type { createOpencodeClient as createOpencodeClientV2, Event as TuiEvent } from "@opencode-ai/sdk/v2"
 import type { CliRenderer, ParsedKey, Plugin as CorePlugin } from "@opentui/core"
-import type { Plugin as ServerPlugin, PluginOptions } from "./index"
+import type { Plugin as ServerPlugin, PluginOptions } from "./index.js"
 
 export type { CliRenderer, SlotMode } from "@opentui/core"
 
