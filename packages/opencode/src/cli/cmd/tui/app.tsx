@@ -43,7 +43,7 @@ import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
 import { DialogConfirm } from "./ui/dialog-confirm"
 import { DialogPrompt } from "./ui/dialog-prompt"
-import { DialogSelect } from "./ui/dialog-select"
+import { DialogSelect, type DialogSelectOption as SelectOption } from "./ui/dialog-select"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
@@ -56,7 +56,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
-import type { TuiApi, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
+import type { TuiApi, TuiDialogSelectOption, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
 import { TuiPlugin } from "./plugin"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
@@ -138,6 +138,235 @@ function rendererConfig(_config: TuiConfig.Info): CliRendererConfig {
       },
     },
   }
+}
+
+type RouteEntry = {
+  key: symbol
+  render: TuiRouteDefinition["render"]
+}
+
+type RouteMap = Map<string, RouteEntry[]>
+
+type ApiInput = {
+  command: ReturnType<typeof useCommandDialog>
+  dialog: ReturnType<typeof useDialog>
+  keybind: ReturnType<typeof useKeybind>
+  route: ReturnType<typeof useRoute>
+  routes: RouteMap
+  bump: () => void
+  theme: ReturnType<typeof useTheme>
+  toast: ReturnType<typeof useToast>
+}
+
+function routeRegister(routes: RouteMap, list: TuiRouteDefinition<JSX.Element>[], bump: () => void) {
+  const key = Symbol()
+  for (const item of list) {
+    const prev = routes.get(item.name) ?? []
+    prev.push({ key, render: item.render })
+    routes.set(item.name, prev)
+  }
+  bump()
+
+  return () => {
+    for (const item of list) {
+      const prev = routes.get(item.name)
+      if (!prev) continue
+      const next = prev.filter((x) => x.key !== key)
+      if (!next.length) {
+        routes.delete(item.name)
+        continue
+      }
+      routes.set(item.name, next)
+    }
+    bump()
+  }
+}
+
+function routeNavigate(route: ReturnType<typeof useRoute>, name: string, params?: Record<string, unknown>) {
+  if (name === "home") {
+    route.navigate({ type: "home" })
+    return
+  }
+
+  if (name === "session") {
+    const sessionID = params?.sessionID
+    if (typeof sessionID !== "string") return
+    route.navigate({ type: "session", sessionID })
+    return
+  }
+
+  route.navigate({ type: "plugin", id: name, data: params })
+}
+
+function routeCurrent(route: ReturnType<typeof useRoute>): TuiApi<JSX.Element>["route"]["current"] {
+  if (route.data.type === "home") return { name: "home" }
+  if (route.data.type === "session") {
+    return {
+      name: "session",
+      params: {
+        sessionID: route.data.sessionID,
+        initialPrompt: route.data.initialPrompt,
+      },
+    }
+  }
+
+  return {
+    name: route.data.id,
+    params: route.data.data,
+  }
+}
+
+function mapOption<Value>(item: TuiDialogSelectOption<Value, JSX.Element>): SelectOption<Value> {
+  return {
+    ...item,
+    onSelect: () => item.onSelect?.(),
+  }
+}
+
+function pickOption<Value>(item: SelectOption<Value>): TuiDialogSelectOption<Value, JSX.Element> {
+  return {
+    title: item.title,
+    value: item.value,
+    description: item.description,
+    footer: item.footer,
+    category: item.category,
+    disabled: item.disabled,
+  }
+}
+
+function mapOptionCb<Value>(cb?: (item: TuiDialogSelectOption<Value, JSX.Element>) => void) {
+  if (!cb) return
+  return (item: SelectOption<Value>) => cb(pickOption(item))
+}
+
+function createTuiApi(input: ApiInput): TuiApi<JSX.Element> {
+  return {
+    command: {
+      register(cb) {
+        input.command.register(() => cb())
+      },
+      trigger(value) {
+        input.command.trigger(value)
+      },
+    },
+    route: {
+      register(list) {
+        return routeRegister(input.routes, list, input.bump)
+      },
+      navigate(name, params) {
+        routeNavigate(input.route, name, params)
+      },
+      get current() {
+        return routeCurrent(input.route)
+      },
+    },
+    ui: {
+      Dialog(props) {
+        return (
+          <DialogUI size={props.size} onClose={props.onClose}>
+            {props.children as JSX.Element}
+          </DialogUI>
+        )
+      },
+      DialogAlert(props) {
+        return <DialogAlert {...props} />
+      },
+      DialogConfirm(props) {
+        return <DialogConfirm {...props} />
+      },
+      DialogPrompt(props) {
+        return <DialogPrompt {...props} description={props.description as (() => JSX.Element) | undefined} />
+      },
+      DialogSelect(props) {
+        return (
+          <DialogSelect
+            title={props.title}
+            placeholder={props.placeholder}
+            options={props.options.map(mapOption)}
+            flat={props.flat}
+            onMove={mapOptionCb(props.onMove)}
+            onFilter={props.onFilter}
+            onSelect={mapOptionCb(props.onSelect)}
+            skipFilter={props.skipFilter}
+            current={props.current}
+          />
+        )
+      },
+      toast(inputToast) {
+        input.toast.show({
+          title: inputToast.title,
+          message: inputToast.message,
+          variant: inputToast.variant ?? "info",
+          duration: inputToast.duration,
+        })
+      },
+      dialog: {
+        replace(render, onClose) {
+          input.dialog.replace(render, onClose)
+        },
+        clear() {
+          input.dialog.clear()
+        },
+        setSize(size) {
+          input.dialog.setSize(size)
+        },
+        get size() {
+          return input.dialog.size
+        },
+        get depth() {
+          return input.dialog.stack.length
+        },
+        get open() {
+          return input.dialog.stack.length > 0
+        },
+      },
+    },
+    keybind: {
+      parse(evt: ParsedKey) {
+        return input.keybind.parse(evt)
+      },
+      match(key, evt: ParsedKey) {
+        return input.keybind.match(key, evt)
+      },
+      print(key) {
+        return input.keybind.print(key)
+      },
+      create(defaults, overrides) {
+        return input.keybind.create(defaults, overrides)
+      },
+    },
+    theme: {
+      get current() {
+        return input.theme.theme
+      },
+      get selected() {
+        return input.theme.selected
+      },
+      has(name) {
+        return input.theme.has(name)
+      },
+      set(name) {
+        return input.theme.set(name)
+      },
+      async install(_jsonPath) {
+        throw new Error("theme.install is only available in plugin context")
+      },
+      mode() {
+        return input.theme.mode()
+      },
+      get ready() {
+        return input.theme.ready
+      },
+    },
+  }
+}
+
+function errorMessage(error: unknown) {
+  if (!error) return "An error occurred"
+  if (!error || typeof error !== "object" || !("data" in error)) return String(error)
+  if (!error.data || typeof error.data !== "object" || !("message" in error.data)) return String(error)
+  if (typeof error.data.message !== "string") return String(error)
+  return error.data.message
 }
 
 export function tui(input: {
@@ -236,205 +465,22 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
-  const routes = new Map<string, { key: symbol; render: TuiRouteDefinition["render"] }[]>()
+  const routes: RouteMap = new Map()
   const [routeRev, setRouteRev] = createSignal(0)
   const routeView = (name: string) => {
     routeRev()
     return routes.get(name)?.at(-1)?.render
   }
-
-  const api: TuiApi<JSX.Element> = {
-    command: {
-      register(cb) {
-        command.register(() => cb())
-      },
-      trigger(value) {
-        command.trigger(value)
-      },
-    },
-    route: {
-      register(input) {
-        const key = Symbol()
-        for (const item of input) {
-          const list = routes.get(item.name) ?? []
-          list.push({ key, render: item.render })
-          routes.set(item.name, list)
-        }
-        setRouteRev((x) => x + 1)
-        return () => {
-          for (const item of input) {
-            const list = routes.get(item.name)
-            if (!list) continue
-            routes.set(
-              item.name,
-              list.filter((x) => x.key !== key),
-            )
-            if (!routes.get(item.name)?.length) routes.delete(item.name)
-          }
-          setRouteRev((x) => x + 1)
-        }
-      },
-      navigate(name, params) {
-        if (name === "home") {
-          route.navigate({ type: "home" })
-          return
-        }
-
-        if (name === "session") {
-          const sessionID = params?.sessionID
-          if (typeof sessionID !== "string") return
-          route.navigate({ type: "session", sessionID })
-          return
-        }
-
-        route.navigate({ type: "plugin", id: name, data: params })
-      },
-      get current() {
-        if (route.data.type === "home") return { name: "home" }
-        if (route.data.type === "session") {
-          return {
-            name: "session",
-            params: {
-              sessionID: route.data.sessionID,
-              initialPrompt: route.data.initialPrompt,
-            },
-          }
-        }
-
-        return {
-          name: route.data.id,
-          params: route.data.data,
-        }
-      },
-    },
-    ui: {
-      Dialog(props) {
-        return (
-          <DialogUI size={props.size} onClose={props.onClose}>
-            {props.children as JSX.Element}
-          </DialogUI>
-        )
-      },
-      DialogAlert(props) {
-        return <DialogAlert {...props} />
-      },
-      DialogConfirm(props) {
-        return <DialogConfirm {...props} />
-      },
-      DialogPrompt(props) {
-        return <DialogPrompt {...props} description={props.description as (() => JSX.Element) | undefined} />
-      },
-      DialogSelect(props) {
-        const list = props.options.map((item) => ({
-          ...item,
-          footer: item.footer as JSX.Element | string | undefined,
-          onSelect: () => item.onSelect?.(),
-        }))
-        return (
-          <DialogSelect
-            title={props.title}
-            placeholder={props.placeholder}
-            options={list}
-            flat={props.flat}
-            onMove={
-              props.onMove
-                ? (item) =>
-                    props.onMove?.({
-                      title: item.title,
-                      value: item.value,
-                      description: item.description,
-                      footer: item.footer,
-                      category: item.category,
-                      disabled: item.disabled,
-                    })
-                : undefined
-            }
-            onFilter={props.onFilter}
-            onSelect={
-              props.onSelect
-                ? (item) =>
-                    props.onSelect?.({
-                      title: item.title,
-                      value: item.value,
-                      description: item.description,
-                      footer: item.footer,
-                      category: item.category,
-                      disabled: item.disabled,
-                    })
-                : undefined
-            }
-            skipFilter={props.skipFilter}
-            current={props.current}
-          />
-        )
-      },
-      toast(input) {
-        toast.show({
-          title: input.title,
-          message: input.message,
-          variant: input.variant ?? "info",
-          duration: input.duration,
-        })
-      },
-      dialog: {
-        replace(render, onClose) {
-          dialog.replace(render, onClose)
-        },
-        clear() {
-          dialog.clear()
-        },
-        setSize(size) {
-          dialog.setSize(size)
-        },
-        get size() {
-          return dialog.size
-        },
-        get depth() {
-          return dialog.stack.length
-        },
-        get open() {
-          return dialog.stack.length > 0
-        },
-      },
-    },
-    keybind: {
-      parse(evt: ParsedKey) {
-        return keybind.parse(evt)
-      },
-      match(key, evt: ParsedKey) {
-        return keybind.match(key, evt)
-      },
-      print(key) {
-        return keybind.print(key)
-      },
-      create(defaults, overrides) {
-        return keybind.create(defaults, overrides)
-      },
-    },
-    theme: {
-      get current() {
-        return theme
-      },
-      get selected() {
-        return themeState.selected
-      },
-      has(name) {
-        return themeState.has(name)
-      },
-      set(name) {
-        return themeState.set(name)
-      },
-      async install(_jsonPath) {
-        throw new Error("theme.install is only available in plugin context")
-      },
-      mode() {
-        return themeState.mode()
-      },
-      get ready() {
-        return themeState.ready
-      },
-    },
-  }
+  const api = createTuiApi({
+    command,
+    dialog,
+    keybind,
+    route,
+    routes,
+    bump: () => setRouteRev((x) => x + 1),
+    theme: themeState,
+    toast,
+  })
   const [ready, setReady] = createSignal(false)
   TuiPlugin.init({
     client: sdk.client,
@@ -944,17 +990,7 @@ function App() {
   sdk.event.on(SessionApi.Event.Error.type, (evt) => {
     const error = evt.properties.error
     if (error && typeof error === "object" && error.name === "MessageAbortedError") return
-    const message = (() => {
-      if (!error) return "An error occurred"
-
-      if (typeof error === "object") {
-        const data = error.data
-        if ("message" in data && typeof data.message === "string") {
-          return data.message
-        }
-      }
-      return String(error)
-    })()
+    const message = errorMessage(error)
 
     toast.show({
       variant: "error",

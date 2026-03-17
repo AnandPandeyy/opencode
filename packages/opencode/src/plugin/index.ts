@@ -16,10 +16,77 @@ import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-au
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
+  type Loaded = {
+    item: Config.PluginSpec
+    spec: string
+    mod: Record<string, unknown>
+  }
+
   const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
+
+  function isServerPlugin(value: unknown): value is PluginInstance {
+    return typeof value === "function"
+  }
+
+  function getServerPlugin(value: unknown) {
+    if (isServerPlugin(value)) return value
+    if (!value || typeof value !== "object" || !("server" in value)) return
+    if (!isServerPlugin(value.server)) return
+    return value.server
+  }
+
+  async function resolvePlugin(spec: string) {
+    const parsed = parsePluginSpecifier(spec)
+    const target = await resolvePluginTarget(spec, parsed).catch((err) => {
+      const cause = err instanceof Error ? err.cause : err
+      const detail = cause instanceof Error ? cause.message : String(cause ?? err)
+      log.error("failed to install plugin", { pkg: parsed.pkg, version: parsed.version, error: detail })
+      Bus.publish(Session.Event.Error, {
+        error: new NamedError.Unknown({
+          message: `Failed to install plugin ${parsed.pkg}@${parsed.version}: ${detail}`,
+        }).toObject(),
+      })
+      return ""
+    })
+    if (!target) return
+    return target
+  }
+
+  async function prepPlugin(item: Config.PluginSpec): Promise<Loaded | undefined> {
+    const spec = Config.pluginSpecifier(item)
+    // ignore old codex plugin since it is supported first party now
+    if (spec.includes("opencode-openai-codex-auth") || spec.includes("opencode-copilot-auth")) return
+    log.info("loading plugin", { path: spec })
+    const target = await resolvePlugin(spec)
+    if (!target) return
+    const mod = await import(target).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err)
+      log.error("failed to load plugin", { path: spec, error: message })
+      Bus.publish(Session.Event.Error, {
+        error: new NamedError.Unknown({
+          message: `Failed to load plugin ${spec}: ${message}`,
+        }).toObject(),
+      })
+      return
+    })
+    if (!mod) return
+    return {
+      item,
+      spec,
+      mod,
+    }
+  }
+
+  async function applyPlugin(load: Loaded, input: PluginInput, hooks: Hooks[]) {
+    for (const [, entry] of uniqueModuleEntries(load.mod)) {
+      const server = getServerPlugin(entry)
+      if (!server) throw new TypeError("Plugin export is not a function")
+      hooks.push(await server(input, Config.pluginOptions(load.item)))
+    }
+  }
 
   const state = Instance.state(async () => {
     const client = createOpencodeClient({
@@ -59,60 +126,7 @@ export namespace Plugin {
       plugins = [...BUILTIN, ...plugins]
     }
 
-    async function resolvePlugin(spec: string) {
-      const parsed = parsePluginSpecifier(spec)
-      const target = await resolvePluginTarget(spec, parsed).catch((err) => {
-        const cause = err instanceof Error ? err.cause : err
-        const detail = cause instanceof Error ? cause.message : String(cause ?? err)
-        log.error("failed to install plugin", { pkg: parsed.pkg, version: parsed.version, error: detail })
-        Bus.publish(Session.Event.Error, {
-          error: new NamedError.Unknown({
-            message: `Failed to install plugin ${parsed.pkg}@${parsed.version}: ${detail}`,
-          }).toObject(),
-        })
-        return ""
-      })
-      if (!target) return
-      return target
-    }
-
-    function isServerPlugin(value: unknown): value is PluginInstance {
-      return typeof value === "function"
-    }
-
-    function getServerPlugin(value: unknown) {
-      if (isServerPlugin(value)) return value
-      if (!value || typeof value !== "object" || !("server" in value)) return
-      if (!isServerPlugin(value.server)) return
-      return value.server
-    }
-
-    const prep = async (item: (typeof plugins)[number]) => {
-      const spec = Config.pluginSpecifier(item)
-      // ignore old codex plugin since it is supported first party now
-      if (spec.includes("opencode-openai-codex-auth") || spec.includes("opencode-copilot-auth")) return
-      log.info("loading plugin", { path: spec })
-      const target = await resolvePlugin(spec)
-      if (!target) return
-      const mod = await import(target).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        log.error("failed to load plugin", { path: spec, error: message })
-        Bus.publish(Session.Event.Error, {
-          error: new NamedError.Unknown({
-            message: `Failed to load plugin ${spec}: ${message}`,
-          }).toObject(),
-        })
-        return
-      })
-      if (!mod) return
-      return {
-        item,
-        spec,
-        mod,
-      }
-    }
-
-    const loaded = await Promise.all(plugins.map((item) => prep(item)))
+    const loaded = await Promise.all(plugins.map((item) => prepPlugin(item)))
     for (const load of loaded) {
       if (!load) continue
 
@@ -121,13 +135,7 @@ export namespace Plugin {
       // Prevent duplicate initialization when plugins export the same function
       // as both a named export and default export (e.g., `export const X` and `export default X`).
       // uniqueModuleEntries keeps only the first export for each shared value reference.
-      await (async () => {
-        for (const [, entry] of uniqueModuleEntries(load.mod)) {
-          const server = getServerPlugin(entry)
-          if (!server) throw new TypeError("Plugin export is not a function")
-          hooks.push(await server(input, Config.pluginOptions(load.item)))
-        }
-      })().catch((err) => {
+      await applyPlugin(load, input, hooks).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         log.error("failed to load plugin", { path: load.spec, error: message })
         Bus.publish(Session.Event.Error, {

@@ -26,6 +26,11 @@ export namespace TuiConfig {
     meta: PluginMeta
   }
 
+  type Acc = {
+    result: Info
+    entries: PluginEntry[]
+  }
+
   export type Info = z.output<typeof Info> & {
     plugin_meta?: Record<string, PluginMeta>
   }
@@ -59,6 +64,46 @@ export namespace TuiConfig {
     return Flag.OPENCODE_TUI_CONFIG
   }
 
+  function normalize(raw: Record<string, unknown>) {
+    const data = { ...raw }
+    if (!("tui" in data)) return data
+    if (!isRecord(data.tui)) {
+      delete data.tui
+      return data
+    }
+
+    const tui = data.tui
+    delete data.tui
+    return {
+      ...tui,
+      ...data,
+    }
+  }
+
+  function installDeps(dir: string): Promise<void> {
+    return Config.needsInstall(dir).then((yes) => {
+      if (!yes) return
+      return Config.installDependencies(dir)
+    })
+  }
+
+  async function mergeFile(acc: Acc, file: string) {
+    const data = await loadFile(file)
+    acc.result = mergeInfo(acc.result, data)
+    if (!data.plugin?.length) return
+
+    const scope = pluginScope(file)
+    for (const item of data.plugin) {
+      acc.entries.push({
+        item,
+        meta: {
+          scope,
+          source: file,
+        },
+      })
+    }
+  }
+
   const state = Instance.state(async () => {
     let projectFiles = Flag.OPENCODE_DISABLE_PROJECT_CONFIG
       ? []
@@ -72,74 +117,54 @@ export namespace TuiConfig {
       ? []
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
 
-    let result: Info = {}
-    const pluginEntries: PluginEntry[] = []
-
-    const mergeFile = async (file: string) => {
-      const data = await loadFile(file)
-      result = mergeInfo(result, data)
-      if (!data.plugin?.length) return
-      const sourceScope = pluginScope(file)
-      for (const item of data.plugin) {
-        pluginEntries.push({
-          item,
-          meta: {
-            scope: sourceScope,
-            source: file,
-          },
-        })
-      }
+    const acc: Acc = {
+      result: {},
+      entries: [],
     }
 
     for (const file of ConfigPaths.fileInDirectory(Global.Path.config, "tui")) {
-      await mergeFile(file)
+      await mergeFile(acc, file)
     }
 
     if (custom) {
-      await mergeFile(custom)
+      await mergeFile(acc, custom)
       log.debug("loaded custom tui config", { path: custom })
     }
 
     for (const file of projectFiles) {
-      await mergeFile(file)
+      await mergeFile(acc, file)
     }
 
     for (const dir of unique(directories)) {
       if (!dir.endsWith(".opencode") && dir !== Flag.OPENCODE_CONFIG_DIR) continue
       for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
-        await mergeFile(file)
+        await mergeFile(acc, file)
       }
     }
 
     if (existsSync(managed)) {
       for (const file of ConfigPaths.fileInDirectory(managed, "tui")) {
-        await mergeFile(file)
+        await mergeFile(acc, file)
       }
     }
 
-    const merged = dedupePlugins(pluginEntries)
-    result.keybinds = Config.Keybinds.parse(result.keybinds ?? {})
-    result.plugin = merged.map((item) => item.item)
-    result.plugin_meta = merged.length
+    const merged = dedupePlugins(acc.entries)
+    acc.result.keybinds = Config.Keybinds.parse(acc.result.keybinds ?? {})
+    acc.result.plugin = merged.map((item) => item.item)
+    acc.result.plugin_meta = merged.length
       ? Object.fromEntries(merged.map((item) => [Config.getPluginName(item.item), item.meta]))
       : undefined
 
     const deps: Promise<void>[] = []
-    if (result.plugin?.length) {
+    if (acc.result.plugin?.length) {
       for (const dir of unique(directories)) {
         if (!dir.endsWith(".opencode") && dir !== Flag.OPENCODE_CONFIG_DIR) continue
-        deps.push(
-          (async () => {
-            const shouldInstall = await Config.needsInstall(dir)
-            if (!shouldInstall) return
-            await Config.installDependencies(dir)
-          })(),
-        )
+        deps.push(installDeps(dir))
       }
     }
 
     return {
-      config: result,
+      config: acc.result,
       deps,
     }
   })
@@ -168,20 +193,7 @@ export namespace TuiConfig {
 
     // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
     // (mirroring the old opencode.json shape) still get their settings applied.
-    const normalized = (() => {
-      const copy = { ...raw }
-      if (!("tui" in copy)) return copy
-      if (!isRecord(copy.tui)) {
-        delete copy.tui
-        return copy
-      }
-      const tui = copy.tui
-      delete copy.tui
-      return {
-        ...tui,
-        ...copy,
-      }
-    })()
+    const normalized = normalize(raw)
 
     const parsed = Info.safeParse(normalized)
     if (!parsed.success) {

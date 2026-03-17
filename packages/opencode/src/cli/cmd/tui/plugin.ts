@@ -32,6 +32,17 @@ type SlotProps<K extends keyof TuiSlotMap> = {
 
 type Slot = <K extends keyof TuiSlotMap>(props: SlotProps<K>) => JSX.Element | null
 type InitInput = Omit<TuiPluginInput<CliRenderer>, "slots">
+type Loaded = {
+  item: Config.PluginSpec
+  spec: string
+  mod: Record<string, unknown>
+  install: TuiTheme["install"]
+  init: TuiPluginInit
+}
+type Deps = {
+  wait?: Promise<void>
+}
+
 const log = Log.create({ service: "tui.plugin" })
 
 function empty<K extends keyof TuiSlotMap>(_props: SlotProps<K>) {
@@ -139,6 +150,133 @@ function makeInstallFn(meta: TuiConfig.PluginMeta, root: string, spec: string): 
   }
 }
 
+function createApi(
+  api: TuiPluginInput<CliRenderer>["api"],
+  install: TuiTheme["install"],
+): TuiPluginInput<CliRenderer>["api"] {
+  return {
+    command: api.command,
+    route: api.route,
+    ui: api.ui,
+    keybind: api.keybind,
+    theme: Object.create(api.theme, {
+      install: {
+        value: install,
+        configurable: true,
+        enumerable: true,
+      },
+    }),
+  }
+}
+
+function waitDeps(state: Deps) {
+  state.wait ??= TuiConfig.waitForDependencies().catch((error) => {
+    log.warn("failed waiting for tui plugin dependencies", { error })
+  })
+  return state.wait
+}
+
+async function prepPlugin(config: TuiConfig.Info, item: Config.PluginSpec, retry = false): Promise<Loaded | undefined> {
+  const spec = Config.pluginSpecifier(item)
+  log.info("loading tui plugin", { path: spec, retry })
+  const target = await resolvePluginTarget(spec).catch((error) => {
+    log.error("failed to resolve tui plugin", { path: spec, retry, error })
+    return
+  })
+  if (!target) return
+
+  const meta = await PluginMeta.touch(spec, target).catch((error) => {
+    log.warn("failed to track tui plugin", { path: spec, retry, error })
+  })
+  if (meta && meta.state !== "same") {
+    log.info("tui plugin metadata updated", {
+      path: spec,
+      retry,
+      state: meta.state,
+      source: meta.entry.source,
+      version: meta.entry.version,
+      modified: meta.entry.modified,
+    })
+  }
+
+  const now = Date.now()
+  const init: TuiPluginInit = meta
+    ? {
+        state: meta.state,
+        entry: meta.entry,
+      }
+    : {
+        state: "first",
+        entry: {
+          name: spec,
+          source: spec.startsWith("file://") ? "file" : "npm",
+          spec,
+          target,
+          first_time: now,
+          last_time: now,
+          time_changed: now,
+          load_count: 1,
+          fingerprint: target,
+        },
+      }
+
+  const root = pluginRoot(spec, target)
+  const pluginMeta = getPluginMeta(config, item)
+  if (!pluginMeta) {
+    log.warn("missing tui plugin metadata", {
+      path: spec,
+      retry,
+      name: Config.getPluginName(item),
+    })
+    return
+  }
+
+  const install = makeInstallFn(pluginMeta, root, spec)
+  const mod = await import(target).catch((error) => {
+    log.error("failed to load tui plugin", { path: spec, retry, error })
+    return
+  })
+  if (!mod) return
+
+  return {
+    item,
+    spec,
+    mod,
+    install,
+    init,
+  }
+}
+
+async function applyPlugin(input: TuiPluginInput<CliRenderer>, load: Loaded) {
+  const api = createApi(input.api, load.install)
+  const opts = Config.pluginOptions(load.item) ?? null
+
+  for (const [name, value] of uniqueModuleEntries(load.mod)) {
+    if (!value || typeof value !== "object") {
+      log.warn("ignoring non-object tui plugin export", {
+        path: load.spec,
+        name,
+        type: value === null ? "null" : typeof value,
+      })
+      continue
+    }
+
+    const slotPlugin = getTuiSlotPlugin(value)
+    if (slotPlugin) input.slots.register(slotPlugin)
+
+    const tuiPlugin = getTuiPlugin(value)
+    if (!tuiPlugin) continue
+    await tuiPlugin(
+      {
+        ...input,
+        api,
+      },
+      opts,
+      load.init,
+    )
+  }
+}
+
 export namespace TuiPlugin {
   let dir = ""
   let loaded: Promise<void> | undefined
@@ -194,142 +332,28 @@ export namespace TuiPlugin {
       fn: async () => {
         const config = await TuiConfig.get()
         const plugins = config.plugin ?? []
-        let deps: Promise<void> | undefined
-        const wait = async () => {
-          if (deps) {
-            await deps
-            return
-          }
-          deps = TuiConfig.waitForDependencies().catch((error) => {
-            log.warn("failed waiting for tui plugin dependencies", { error })
-          })
-          await deps
-        }
-
-        const prep = async (item: (typeof plugins)[number], retry = false) => {
-          const spec = Config.pluginSpecifier(item)
-          log.info("loading tui plugin", { path: spec, retry })
-          const target = await resolvePluginTarget(spec).catch((error) => {
-            log.error("failed to resolve tui plugin", { path: spec, retry, error })
-            return
-          })
-          if (!target) return
-          const meta = await PluginMeta.touch(spec, target).catch((error) => {
-            log.warn("failed to track tui plugin", { path: spec, retry, error })
-          })
-          if (meta && meta.state !== "same") {
-            log.info("tui plugin metadata updated", {
-              path: spec,
-              retry,
-              state: meta.state,
-              source: meta.entry.source,
-              version: meta.entry.version,
-              modified: meta.entry.modified,
-            })
-          }
-
-          const now = Date.now()
-          const init: TuiPluginInit = meta
-            ? {
-                state: meta.state,
-                entry: meta.entry,
-              }
-            : {
-                state: "first",
-                entry: {
-                  name: spec,
-                  source: spec.startsWith("file://") ? "file" : "npm",
-                  spec,
-                  target,
-                  first_time: now,
-                  last_time: now,
-                  time_changed: now,
-                  load_count: 1,
-                  fingerprint: target,
-                },
-          }
-
-          const root = pluginRoot(spec, target)
-          const pluginMeta = getPluginMeta(config, item)
-          if (!pluginMeta) {
-            log.warn("missing tui plugin metadata", {
-              path: spec,
-              retry,
-              name: Config.getPluginName(item),
-            })
-            return
-          }
-          const install = makeInstallFn(pluginMeta, root, spec)
-          const mod = await import(target).catch((error) => {
-            log.error("failed to load tui plugin", { path: spec, retry, error })
-            return
-          })
-          if (!mod) return
-
-          return {
-            item,
-            spec,
-            mod,
-            install,
-            init,
-          }
-        }
+        const deps: Deps = {}
 
         try {
-          const loaded = await Promise.all(plugins.map((item) => prep(item)))
+          const loaded = await Promise.all(plugins.map((item) => prepPlugin(config, item)))
 
           for (let i = 0; i < plugins.length; i++) {
-            let load = loaded[i]
-            if (!load) {
+            let entry = loaded[i]
+            if (!entry) {
               const item = plugins[i]
               if (!item) continue
               const spec = Config.pluginSpecifier(item)
               if (!spec.startsWith("file://")) continue
-              await wait()
-              load = await prep(item, true)
+              await waitDeps(deps)
+              entry = await prepPlugin(config, item, true)
             }
-            if (!load) continue
+            if (!entry) continue
 
             // Keep plugin execution sequential for deterministic side effects:
             // command registration order affects keybind/command precedence,
             // route registration is last-wins when ids collide,
             // and hook chains rely on stable plugin ordering.
-            for (const [name, value] of uniqueModuleEntries(load.mod)) {
-              if (!value || typeof value !== "object") {
-                log.warn("ignoring non-object tui plugin export", {
-                  path: load.spec,
-                  name,
-                  type: value === null ? "null" : typeof value,
-                })
-                continue
-              }
-
-              const slotPlugin = getTuiSlotPlugin(value)
-              if (slotPlugin) input.slots.register(slotPlugin)
-
-              const tuiPlugin = getTuiPlugin(value)
-              if (!tuiPlugin) continue
-              await tuiPlugin(
-                {
-                  ...input,
-                  api: {
-                    command: input.api.command,
-                    route: input.api.route,
-                    ui: input.api.ui,
-                    keybind: input.api.keybind,
-                    theme: Object.create(input.api.theme, {
-                      install: {
-                        value: load.install,
-                        configurable: true,
-                        enumerable: true,
-                      },
-                    }),
-                  },
-                },
-                Config.pluginOptions(load.item) ?? null,
-                load.init,
-              )
-            }
+            await applyPlugin(input, entry)
           }
         } finally {
           await PluginMeta.persist().catch((error) => {
