@@ -58,6 +58,7 @@ import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import type { TuiApi, TuiDialogSelectOption, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
 import { TuiPlugin } from "./plugin"
+import { FormatError, FormatUnknownError } from "@/cli/error"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -362,11 +363,20 @@ function createTuiApi(input: ApiInput): TuiApi<JSX.Element> {
 }
 
 function errorMessage(error: unknown) {
-  if (!error) return "An error occurred"
-  if (!error || typeof error !== "object" || !("data" in error)) return String(error)
-  if (!error.data || typeof error.data !== "object" || !("message" in error.data)) return String(error)
-  if (typeof error.data.message !== "string") return String(error)
-  return error.data.message
+  const formatted = FormatError(error)
+  if (formatted !== undefined) return formatted
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "data" in error &&
+    typeof error.data === "object" &&
+    error.data !== null &&
+    "message" in error.data &&
+    typeof error.data.message === "string"
+  ) {
+    return error.data.message
+  }
+  return FormatUnknownError(error)
 }
 
 export function tui(input: {
