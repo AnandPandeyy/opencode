@@ -57,18 +57,23 @@ test("loads plugin theme and keybind APIs with scoped theme installation", async
   await using tmp = await tmpdir({
     init: async (dir) => {
       const localPluginPath = path.join(dir, "local-plugin.ts")
+      const invalidPluginPath = path.join(dir, "invalid-plugin.ts")
       const preloadedPluginPath = path.join(dir, "preloaded-plugin.ts")
       const globalPluginPath = path.join(dir, "global-plugin.ts")
       const localSpec = pathToFileURL(localPluginPath).href
+      const invalidSpec = pathToFileURL(invalidPluginPath).href
       const preloadedSpec = pathToFileURL(preloadedPluginPath).href
       const globalSpec = pathToFileURL(globalPluginPath).href
       const localThemeFile = `local-theme-${stamp}.json`
+      const invalidThemeFile = `invalid-theme-${stamp}.json`
       const globalThemeFile = `global-theme-${stamp}.json`
       const preloadedThemeFile = `preloaded-theme-${stamp}.json`
       const localThemeName = localThemeFile.replace(/\.json$/, "")
+      const invalidThemeName = invalidThemeFile.replace(/\.json$/, "")
       const globalThemeName = globalThemeFile.replace(/\.json$/, "")
       const preloadedThemeName = preloadedThemeFile.replace(/\.json$/, "")
       const localThemePath = path.join(dir, localThemeFile)
+      const invalidThemePath = path.join(dir, invalidThemeFile)
       const globalThemePath = path.join(dir, globalThemeFile)
       const preloadedThemePath = path.join(dir, preloadedThemeFile)
       const localDest = path.join(dir, ".opencode", "themes", localThemeFile)
@@ -76,11 +81,13 @@ test("loads plugin theme and keybind APIs with scoped theme installation", async
       const preloadedDest = path.join(dir, ".opencode", "themes", preloadedThemeFile)
       const fnMarker = path.join(dir, "function-called.txt")
       const localMarker = path.join(dir, "local-called.json")
+      const invalidMarker = path.join(dir, "invalid-called.json")
       const globalMarker = path.join(dir, "global-called.json")
       const preloadedMarker = path.join(dir, "preloaded-called.json")
       const localConfigPath = path.join(dir, "tui.json")
 
       await Bun.write(localThemePath, JSON.stringify({ theme: { primary: "#101010" } }, null, 2))
+      await Bun.write(invalidThemePath, "{ invalid json }")
       await Bun.write(globalThemePath, JSON.stringify({ theme: { primary: "#202020" } }, null, 2))
       await Bun.write(preloadedThemePath, JSON.stringify({ theme: { primary: "#f0f0f0" } }, null, 2))
       await Bun.write(preloadedDest, JSON.stringify({ theme: { primary: "#303030" } }, null, 2))
@@ -144,6 +151,30 @@ export const object_plugin = {
         init_state,
         init_source,
         init_load_count,
+      }),
+    )
+  },
+}
+`,
+      )
+
+      await Bun.write(
+        invalidPluginPath,
+        `export default {
+  tui: async (input, options) => {
+    if (!options?.marker) return
+    const before = input.api.theme.has(options.theme_name)
+    const set_missing = input.api.theme.set(options.theme_name)
+    await input.api.theme.install(options.theme_path)
+    const after = input.api.theme.has(options.theme_name)
+    const set_installed = input.api.theme.set(options.theme_name)
+    await Bun.write(
+      options.marker,
+      JSON.stringify({
+        before,
+        set_missing,
+        after,
+        set_installed,
       }),
     )
   },
@@ -234,6 +265,14 @@ export const object_plugin = {
                 },
               ],
               [
+                invalidSpec,
+                {
+                  marker: invalidMarker,
+                  theme_path: `./${invalidThemeFile}`,
+                  theme_name: invalidThemeName,
+                },
+              ],
+              [
                 preloadedSpec,
                 {
                   marker: preloadedMarker,
@@ -251,22 +290,27 @@ export const object_plugin = {
 
       return {
         localThemeFile,
+        invalidThemeFile,
         globalThemeFile,
         preloadedThemeFile,
         localThemeName,
+        invalidThemeName,
         globalThemeName,
         preloadedThemeName,
         localDest,
         globalDest,
         preloadedDest,
         localPluginPath,
+        invalidPluginPath,
         globalPluginPath,
         preloadedPluginPath,
         localSpec,
+        invalidSpec,
         globalSpec,
         preloadedSpec,
         fnMarker,
         localMarker,
+        invalidMarker,
         globalMarker,
         preloadedMarker,
       }
@@ -421,6 +465,12 @@ export const object_plugin = {
     expect(global.init_source).toBe("file")
     expect(global.init_load_count).toBe(2)
 
+    const invalid = JSON.parse(await fs.readFile(tmp.extra.invalidMarker, "utf8"))
+    expect(invalid.before).toBe(false)
+    expect(invalid.set_missing).toBe(false)
+    expect(invalid.after).toBe(false)
+    expect(invalid.set_installed).toBe(false)
+
     const preloaded = JSON.parse(await fs.readFile(tmp.extra.preloadedMarker, "utf8"))
     expect(preloaded.before).toBe(true)
     expect(preloaded.after).toBe(true)
@@ -460,6 +510,10 @@ export const object_plugin = {
     expect(log).toContain("ignoring non-object tui plugin export")
     expect(log).toContain("name=default")
     expect(log).toContain("type=function")
+
+    const badThemeLog = await waitForLog("failed to parse tui plugin theme")
+    expect(badThemeLog).toContain("failed to parse tui plugin theme")
+    expect(badThemeLog).toContain(tmp.extra.invalidThemeFile)
 
     const meta = JSON.parse(await fs.readFile(path.join(tmp.path, "plugin-meta.json"), "utf8")) as Record<
       string,

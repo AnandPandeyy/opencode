@@ -32,6 +32,7 @@ type SlotProps<K extends keyof TuiSlotMap> = {
 
 type Slot = <K extends keyof TuiSlotMap>(props: SlotProps<K>) => JSX.Element | null
 type InitInput = Omit<TuiPluginInput<CliRenderer>, "slots">
+const log = Log.create({ service: "tui.plugin" })
 
 function empty<K extends keyof TuiSlotMap>(_props: SlotProps<K>) {
   return null
@@ -96,14 +97,10 @@ function themeName(file: string) {
 
 function getPluginMeta(config: TuiConfig.Info, item: Config.PluginSpec) {
   const key = Config.getPluginName(item)
-  const value = config.plugin_meta?.[key]
-  if (!value) {
-    throw new Error(`missing plugin metadata for ${key}`)
-  }
-  return value
+  return config.plugin_meta?.[key]
 }
 
-function makeInstallFn(meta: TuiConfig.PluginMeta, root: string): TuiTheme["install"] {
+function makeInstallFn(meta: TuiConfig.PluginMeta, root: string, spec: string): TuiTheme["install"] {
   return async (file) => {
     const src = resolveThemePath(root, file)
     const theme = themeName(src)
@@ -112,16 +109,30 @@ function makeInstallFn(meta: TuiConfig.PluginMeta, root: string): TuiTheme["inst
     const text = await Bun.file(src)
       .text()
       .catch((error) => {
-        throw new Error(`failed to read theme at ${src}: ${error}`)
+        log.warn("failed to read tui plugin theme", { path: spec, theme: src, error })
+        return
       })
-    const data = JSON.parse(text)
+    if (text === undefined) return
+
+    const fail = Symbol()
+    const data = await Promise.resolve(text)
+      .then((x) => JSON.parse(x) as unknown)
+      .catch((error) => {
+        log.warn("failed to parse tui plugin theme", { path: spec, theme: src, error })
+        return fail
+      })
+    if (data === fail) return
+
     if (!isTheme(data)) {
-      throw new Error(`invalid theme at ${src}`)
+      log.warn("invalid tui plugin theme", { path: spec, theme: src })
+      return
     }
 
     const dest = path.join(scopeDir(meta), `${theme}.json`)
     if (!(await Filesystem.exists(dest))) {
-      await Filesystem.write(dest, text)
+      await Filesystem.write(dest, text).catch((error) => {
+        log.warn("failed to persist tui plugin theme", { path: spec, theme: src, dest, error })
+      })
     }
 
     addTheme(theme, data)
@@ -129,7 +140,7 @@ function makeInstallFn(meta: TuiConfig.PluginMeta, root: string): TuiTheme["inst
 }
 
 export namespace TuiPlugin {
-  const log = Log.create({ service: "tui.plugin" })
+  let dir = ""
   let loaded: Promise<void> | undefined
   let view: Slot = empty
 
@@ -165,7 +176,9 @@ export namespace TuiPlugin {
   }
 
   export async function init(input: InitInput) {
-    if (loaded) return loaded
+    const cwd = process.cwd()
+    if (loaded && dir === cwd) return loaded
+    dir = cwd
     loaded = load({
       ...input,
       slots: setupSlots(input),
@@ -234,10 +247,19 @@ export namespace TuiPlugin {
                   load_count: 1,
                   fingerprint: target,
                 },
-              }
+          }
 
           const root = pluginRoot(spec, target)
-          const install = makeInstallFn(getPluginMeta(config, item), root)
+          const pluginMeta = getPluginMeta(config, item)
+          if (!pluginMeta) {
+            log.warn("missing tui plugin metadata", {
+              path: spec,
+              retry,
+              name: Config.getPluginName(item),
+            })
+            return
+          }
+          const install = makeInstallFn(pluginMeta, root, spec)
           const mod = await import(target).catch((error) => {
             log.error("failed to load tui plugin", { path: spec, retry, error })
             return
